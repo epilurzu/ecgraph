@@ -1,9 +1,23 @@
 import * as topojson from "topojson-client";
 
+var id_key = null;
+var file_name_key = null;
+var patches = null;
+
+const node_indexes = [];
 const scores = { nodes: [] };
 
-function init_scores(n_patches) {
-  for (let index = 0; index < n_patches; index++) {
+const components = [];
+
+function init_global_variables(corridor) {
+  id_key = "OBJECTID"; //todo: generalize
+  file_name_key = Object.keys(corridor.objects)[0];
+  patches = topojson.feature(corridor, corridor.objects[file_name_key])
+    .features;
+
+  for (let index = 0; index < patches.length; index++) {
+    node_indexes.push(index);
+
     scores["nodes"][index] = {
       component: null, // component containing this node
       neighbour_area: null, // adjacent area, if null, it doesn't have any
@@ -13,21 +27,36 @@ function init_scores(n_patches) {
       min_steps_fna: null, // means "minimum steps from nearest area"
       n_shortest_path_in: null, // means "number of shortest path that involve the node", higher is better
       //TODO: chindren_vcn: null,  // means "children virtual cut nodes"
-      //TODO: enclave: null,       // is it really helpful?
+      //TODO: enclave: null,  // is it really helpful?
       //TODO: nb_centrality: null, // is it really helpful?
       score: null
     };
   }
 }
 
-function assign_components(components) {
+function assign_components() {
   for (let component_index = 0; component_index < components.length; component_index++) {
     for (let node_index of components[component_index]) {
       scores.nodes[node_index].component = component_index;
     }
   }
 }
-
+/*
+function assign_vcn_degree() {
+  let node_to_check = node_indexes;
+  while (node_to_check.length != 0) {
+    for (let node_index in node_indexes) {
+      let component_index = scores.nodes[node_index].component;
+      let component = components[component_index];
+      if (splits_component(component, node_index){
+        //update score
+        console.log(+ " is cutnode");
+        node_to_check = [];
+      }
+    }
+  }
+}
+*/
 function union(setA, setB) {
   let _union = new Set(setA);
   for (let elem of setB) {
@@ -46,12 +75,12 @@ function difference(setA, setB) {
   }
   return _difference;
 }
-/*
-function get_id(patches, id_key, node_index) {
+
+function get_id(node_index) {
   return patches[node_index]["properties"][id_key];
 }
-*/
-function get_component(corridor, file_name_key, component, nodes) {
+
+function get_component(corridor, component, nodes) {
   component = union(component, nodes);
 
   let neighborhood = new Set();
@@ -70,15 +99,14 @@ function get_component(corridor, file_name_key, component, nodes) {
     return component;
   }
 
-  return get_component(corridor, file_name_key, component, neighborhood);
+  return get_component(corridor, component, neighborhood);
 }
 
-function get_components(corridor, n_patches, file_name_key) {
-  const components = [];
+function init_components(corridor) {
 
   mainloop: for (
     let node_index = 0;
-    node_index < n_patches;
+    node_index < patches.length;
     node_index++
   ) {
     for (
@@ -98,24 +126,30 @@ function get_components(corridor, n_patches, file_name_key) {
       corridor.objects[file_name_key].geometries
     )[node_index];
 
-    let component = get_component(corridor, file_name_key, new_component, neighbors);
+    let component = get_component(corridor, new_component, neighbors);
     components.push(component);
   }
-
-  return components;
 }
 
 export function compute_vcn(corridor) {
-  //const id_key = "OBJECTID";
-  const file_name_key = Object.keys(corridor.objects)[0];
-  const patches = topojson.feature(corridor, corridor.objects[file_name_key])
-    .features;
-  const n_patches = patches.length;
-  init_scores(n_patches);
+  init_global_variables(corridor);
 
-  const components = get_components(corridor, n_patches, file_name_key);
-  assign_components(components);
+  init_components(corridor);
+  assign_components();
 
-  console.log(components)
+  //neighbour_area: null, // todo
+
+  //assign_vcn_degree();
+
+  //n_components_af: null, // means "number of components after removal", they are resulting from this virtual cut node removal
+  //slc_size_ar: null, // means "second largest component size after removal", it is resulting from this virtual cut node removal
+  //min_steps_fna: null, // means "minimum steps from nearest area"
+  //n_shortest_path_in: null, // means "number of shortest path that involve the node", higher is better
+  //chindren_vcn: null,  // means "children virtual cut nodes"
+  //enclave: null,       // is it really helpful?
+  //nb_centrality: null, // is it really helpful?
+  //score: null
+
   console.log(scores)
+  console.log(components)
 }
