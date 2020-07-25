@@ -46,6 +46,36 @@ function init_component(corridor, node_index, component_index) {
   }
 }
 
+function get_component_minus_node(component, removed_node, node_index) {
+  let neighbors_to_check = node_info[node_index].neighbors;
+  neighbors_to_check = neighbors_to_check.filter((n) => n != removed_node);
+
+  for (let neighbor in neighbors_to_check) {
+    if (!component.has(neighbor)) {
+      component.add(neighbor);
+      component = get_component_minus_node(component, removed_node, neighbor);
+    }
+  }
+
+  return component;
+}
+
+function init_vcn_degree(node_index) {
+  let component = new Set();
+  if (node_info[node_index].neighbors.length == 0) {
+    return; //Todo: which degree is this?
+  }
+  let starting_neighbor = node_info[node_index].neighbors[0];
+  component = get_component_minus_node(component, node_index, starting_neighbor);
+
+  for (let neighbor in node_info[node_index].neighbors) {
+    if (!component.has(neighbor)) {
+      node_info[node_index].vcn_degree = 1;
+      return;
+    }
+  }
+}
+
 function init(corridor) {
   id_key = "OBJECTID"; //todo: generalize
   file_name_key = Object.keys(corridor.objects)[0];
@@ -63,11 +93,26 @@ function init(corridor) {
       n_components++;
     }
   }
+
+  for (let node_index = 0; node_index < n_nodes; node_index++) {
+    init_vcn_degree(node_index);
+  }
+}
+
+function n_cutnode() {
+  let counter = 0;
+  for (let node_index = 0; node_index < n_nodes; node_index++) {
+    if (node_info[node_index].vcn_degree == 1) {
+      counter++;
+    }
+  }
+  return counter;
 }
 
 export function compute_vcn(corridor) {
   let t0 = performance.now();
   init(corridor);
   let t1 = performance.now();
+  console.log(n_cutnode());
   console.log(t1 - t0);
 }
