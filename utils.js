@@ -19,7 +19,7 @@ function init_node(node_index) {
     //TODO: chindren_vcn: null,  // means "children virtual cut nodes"
     //TODO: enclave: null,  // is it really helpful?
     //TODO: nb_centrality: null, // is it really helpful?
-    score: null
+    score: null,
   };
 }
 
@@ -31,17 +31,18 @@ function init_component(corridor, node_index, component_index) {
   node_info[node_index].component = component_index;
 
   let neighbors = null;
-  if (node_info[node_index].neighbors === null) {
+  if (node_info[node_index].neighbors != null) {
     neighbors = node_info[node_index].neighbors;
-  }
-  else {
-    neighbors = topojson.neighbors(corridor.objects[file_name_key].geometries)[node_index];
+  } else {
+    neighbors = topojson.neighbors(corridor.objects[file_name_key].geometries)[
+      node_index
+    ];
     init_neighbors(node_index, neighbors);
   }
 
-  for (let new_node_index in neighbors) {
-    if (node_info[new_node_index].component === null) {
-      init_component(corridor, node, component_index);
+  for (let neighbor of neighbors) {
+    if (node_info[neighbor].component == null) {
+      init_component(corridor, neighbor, component_index);
     }
   }
 }
@@ -50,7 +51,7 @@ function get_component_minus_node(component, removed_node, node_index) {
   let neighbors_to_check = node_info[node_index].neighbors;
   neighbors_to_check = neighbors_to_check.filter((n) => n != removed_node);
 
-  for (let neighbor in neighbors_to_check) {
+  for (let neighbor of neighbors_to_check) {
     if (!component.has(neighbor)) {
       component.add(neighbor);
       component = get_component_minus_node(component, removed_node, neighbor);
@@ -60,19 +61,53 @@ function get_component_minus_node(component, removed_node, node_index) {
   return component;
 }
 
-function init_vcn_degree(node_index) {
+function b(component, node_index, degree) {
+  for (let neighbor of node_info[node_index].neighbors) {
+    if (!component.has(neighbor)) {
+      node_info[node_index].vcn_degree = degree;
+      return true;
+    }
+  }
+  return false;
+}
+
+function a(component, node_index, degree, iteration) {
+  if (iteration == 1) {
+    let found = b(component, node_index, degree);
+    return found;
+  } else {
+    for (let node_to_remove of component) {
+      let component_to_check = component.filter((n) => n != node_to_remove);
+      let found = a(component_to_check, node_index, degree, iteration - 1);
+      if (found) {
+        if (node_info[node_to_remove].vcn_degree == null) {
+          // if this node has already a degree it's fine, but if it has not, it's already possible to assign the current degree
+          node_info[node_to_remove].vcn_degree = degree;
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+function init_vcn_degree(node_index, degree) {
   let component = new Set();
   if (node_info[node_index].neighbors.length == 0) {
-    return; //Todo: which degree is this?
+    //should not enter at all, change this
+    return;
   }
-  let starting_neighbor = node_info[node_index].neighbors[0];
-  component = get_component_minus_node(component, node_index, starting_neighbor);
+  let starting_neighbor = node_info[node_index].neighbors[0]; // init second largest component and n component
+  component = get_component_minus_node(
+    component,
+    node_index,
+    starting_neighbor
+  );
 
-  for (let neighbor in node_info[node_index].neighbors) {
-    if (!component.has(neighbor)) {
-      node_info[node_index].vcn_degree = 1;
-      return;
-    }
+  if (degree > 1) {
+    a(component, node_index, degree, degree);
+  } else {
+    b(component, node_index, degree);
   }
 }
 
@@ -82,27 +117,44 @@ function init(corridor) {
   n_nodes = corridor.objects[file_name_key].geometries.length;
 
   let n_components = 0;
-
+  let t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
     init_node(node_index);
   }
-
+  let t1 = performance.now();
+  console.log("init node: " + (t1 - t0) / 1000);
+  t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
     if (node_info[node_index].component === null) {
       init_component(corridor, node_index, n_components);
       n_components++;
     }
   }
-
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    init_vcn_degree(node_index);
+  t1 = performance.now();
+  console.log("init component: " + (t1 - t0) / 1000);
+  /*
+  t0 = performance.now();
+  let degree = 1;
+  let condition = true;
+  while (condition) {
+    for (let node_index = 0; node_index < n_nodes; node_index++) {
+      if (node_info[node_index].vcn_degree == null) {
+        //&& con vicini o con disposizione vicini che possono creare vcn
+        init_vcn_degree(node_index, degree);
+      }
+    }
+    degree++;
+    condition = degree == 3; //tutti hanno un grado o raggiunto grado massimo o null senza vicini o con disposizione vicini che non creano mai vcn
   }
+  t1 = performance.now();
+  console.log("init vcn degree: " + (t1 - t0) / 1000);
+  */
 }
 
 function n_cutnode() {
   let counter = 0;
   for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].vcn_degree == 1) {
+    if (node_info[node_index].vcn_degree != null) {
       counter++;
     }
   }
@@ -110,9 +162,10 @@ function n_cutnode() {
 }
 
 export function compute_vcn(corridor) {
-  let t0 = performance.now();
+  //let t0 = performance.now();
   init(corridor);
-  let t1 = performance.now();
+  //let t1 = performance.now();
   console.log(n_cutnode());
-  console.log(t1 - t0);
+  console.log(node_info);
+  //console.log((t1 - t0) / 1000);
 }
