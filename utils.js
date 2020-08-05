@@ -1,5 +1,7 @@
 import * as topojson from "topojson-client";
 
+var corridor = null;
+
 var ALONE = 0;
 var APPENDIX = -1;
 
@@ -9,7 +11,7 @@ var file_name_key = null; // Corr_Dec_1
 var n_nodes = null;
 const node_info = [];
 
-function get_id(corridor, node) {
+function get_id(node) {
   return corridor.objects[file_name_key].geometries[node].properties[id_key]
 }
 
@@ -34,7 +36,7 @@ function init_neighbors(node_index, neighbors) {
   node_info[node_index].neighbors = neighbors;
 }
 
-function init_component(corridor, node_index, component_index) {
+function init_component(node_index, component_index) {
   node_info[node_index].component = component_index;
 
   let neighbors = null;
@@ -49,7 +51,7 @@ function init_component(corridor, node_index, component_index) {
 
   for (let neighbor of neighbors) {
     if (node_info[neighbor].component == null) {
-      init_component(corridor, neighbor, component_index);
+      init_component(neighbor, component_index);
     }
   }
 }
@@ -212,7 +214,7 @@ function init_cut_node(node_to_check) {
 
 /*******************************/
 
-function init(corridor) {
+function init() {
   id_key = "OBJECTID"; //todo: generalize
   file_name_key = Object.keys(corridor.objects)[0];
   n_nodes = corridor.objects[file_name_key].geometries.length;
@@ -229,7 +231,7 @@ function init(corridor) {
   t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
     if (node_info[node_index].component == null) {
-      init_component(corridor, node_index, n_components);
+      init_component(node_index, n_components);
       n_components++;
     }
   }
@@ -257,10 +259,11 @@ function init(corridor) {
   */
 }
 
-export function compute_vcn(corridor) {
+export function compute_vcn(_corridor) {
   //let t0 = performance.now();
   read_json();
-  init(corridor);
+  corridor = _corridor;
+  init();
   //write_json()
   //let t1 = performance.now();
   n_nodes_with_degree(-1);
