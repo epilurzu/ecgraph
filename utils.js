@@ -9,8 +9,8 @@ const node_info = [];
 function init_node(node_index) {
   node_info[node_index] = {
     component: null, // component containing this node
-    neighbours: null, // pleonastic, isn't it?
-    neighbour_area: null, // adjacent area, if null, it doesn't have any
+    neighbors: null, // pleonastic, isn't it?
+    neighbor_area: null, // adjacent area, if null, it doesn't have any
     vcn_degree: null, // means "virtual cut node degree", if 1 it is a cut node, if null it hasn't been calculated
     n_components_ar: null, // means "number of components after removal", they are resulting from this virtual cut node removal
     slc_size_ar: null, // means "second largest component size after removal", it is resulting from this virtual cut node removal
@@ -45,20 +45,6 @@ function init_component(corridor, node_index, component_index) {
       init_component(corridor, neighbor, component_index);
     }
   }
-}
-
-function get_component_minus_node(component, removed_node, node_index) {
-  let neighbors_to_check = node_info[node_index].neighbors;
-  neighbors_to_check = neighbors_to_check.filter((n) => n != removed_node);
-
-  for (let neighbor of neighbors_to_check) {
-    if (!component.has(neighbor)) {
-      component.add(neighbor);
-      component = get_component_minus_node(component, removed_node, neighbor);
-    }
-  }
-
-  return component;
 }
 
 /*******************************/
@@ -178,6 +164,46 @@ function find_children(parent) {
 
 /*******************************/
 
+function get_subcomponent(component, nodes_to_remove, node_index) {
+  component.add(node_index);
+
+  let neighbors_to_check = node_info[node_index].neighbors;
+  neighbors_to_check = neighbors_to_check.filter((n) => !nodes_to_remove.includes(n));
+
+  for (let neighbor of neighbors_to_check) {
+    if (!component.has(neighbor)) {
+      component = get_subcomponent(component, nodes_to_remove, neighbor);
+    }
+  }
+
+  return component;
+}
+
+function get_component(component, node_to_add) {
+  component.add(node_to_add);
+  let neighbors = node_info[node_to_add].neighbors;
+
+  for (let neighbor of neighbors) {
+    if (!component.has(neighbor)) {
+      component = get_component(component, neighbor);
+    }
+  }
+
+  return component;
+}
+
+function init_cut_node(node_to_check) {
+  let component = get_component(new Set(), node_to_check);
+  let starting_node = node_info[node_to_check].neighbors[0];
+  let subcomponent = get_subcomponent(new Set(), [node_to_check], starting_node); //if exist
+
+  if (subcomponent.size < (component.size - 1)) {
+    node_info[node_to_check].vcn_degree = 1;
+    return;
+  }
+}
+
+/*******************************/
 
 function init(corridor) {
   id_key = "OBJECTID"; //todo: generalize
@@ -191,15 +217,25 @@ function init(corridor) {
   }
   let t1 = performance.now();
   console.log("init node: " + (t1 - t0) / 1000);
+
   t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].component === null) {
+    if (node_info[node_index].component == null) {
       init_component(corridor, node_index, n_components);
       n_components++;
     }
   }
   t1 = performance.now();
   console.log("init component: " + (t1 - t0) / 1000);
+
+  t0 = performance.now();
+  for (let node_index = 0; node_index < n_nodes; node_index++) {
+    if (node_info[node_index].vcn_degree == null && node_info[node_index].neighbors.length != 0) {
+      init_cut_node(node_index);
+    }
+  }
+  t1 = performance.now();
+  console.log("init cut nodes" + (t1 - t0) / 1000);
 }
 
 function n_cutnode() {
