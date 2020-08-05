@@ -1,5 +1,8 @@
 import * as topojson from "topojson-client";
 
+var ALONE = 0;
+var APPENDIX = -1;
+
 var id_key = null;
 var file_name_key = null; // Corr_Dec_1
 
@@ -230,7 +233,17 @@ function init(corridor) {
 
   t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].vcn_degree == null && node_info[node_index].neighbors.length != 0) {
+    if (node_info[node_index].vcn_degree == null) {
+      if (node_info[node_index].neighbors.length == 0) {
+        node_info[node_index].vcn_degree = ALONE;
+        continue;
+      }
+
+      if (node_info[node_index].neighbors.length == 1) {
+        node_info[node_index].vcn_degree = APPENDIX; // TODO: do while there are no more, post neighbour_areas
+        continue;
+      }
+
       init_cut_node(node_index);
     }
   }
@@ -238,21 +251,30 @@ function init(corridor) {
   console.log("init cut nodes" + (t1 - t0) / 1000);
 }
 
-function n_cutnode() {
-  let counter = 0;
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].vcn_degree != null) {
-      counter++;
-    }
-  }
-  return counter;
-}
-
 export function compute_vcn(corridor) {
   //let t0 = performance.now();
   init(corridor);
   //let t1 = performance.now();
-  console.log(n_cutnode());
+  n_nodes_with_degree(-1);
+  n_nodes_with_degree(0);
+  n_nodes_with_degree(1);
+  n_nodes_with_degree(2);
+  n_nodes_with_degree(3);
+  n_nodes_with_degree(4);
   console.log(node_info);
   //console.log((t1 - t0) / 1000);
 }
+
+/***** FOR QUICK DEBUG *****/
+
+function n_nodes_with_degree(degree) {
+  let counter = 0;
+  for (let node_index = 0; node_index < n_nodes; node_index++) {
+    if (node_info[node_index].vcn_degree == degree) {
+      counter++;
+    }
+  }
+  console.log(degree + ": " + counter);
+}
+
+/***** FOR QUICK DEBUG *****/
