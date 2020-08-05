@@ -61,55 +61,123 @@ function get_component_minus_node(component, removed_node, node_index) {
   return component;
 }
 
-function b(component, node_index, degree) {
-  for (let neighbor of node_info[node_index].neighbors) {
-    if (!component.has(neighbor)) {
-      node_info[node_index].vcn_degree = degree;
-      return true;
+/*******************************/
+
+function is_equal_set(as, bs) {
+  if (as.size !== bs.size) return false;
+  for (var a of as) if (!bs.has(a)) return false;
+  return true;
+}
+
+function remove_duplicate_set(list) {
+  let final_list = [];
+
+  for (let a_set of list) {
+    let contains = false;
+    for (let b_set of final_list) {
+      if (is_equal_set(b_set, a_set)) {
+        contains = true;
+        break;
+      }
+    }
+    if (!contains) {
+      final_list.push(a_set);
     }
   }
+  return final_list;
+}
+
+function is_child(possible_child, component, black_list) {
+  let starting_node = null;
+  let temp_black_list = [...black_list];
+  temp_black_list.push(possible_child);
+  loop:
+  for (let node of temp_black_list) {
+    for (let neighbor of node_info[node].neighbors) {
+      if (!temp_black_list.includes(neighbor)) {
+        starting_node = neighbor;
+        break loop;
+      }
+    }
+  }
+
+  if (starting_node == null) {
+    return false;
+  }
+
+  let subcomponent = get_subcomponent(new Set(), temp_black_list, starting_node);
+
+  if (subcomponent.size < component.size - 1) {
+    return true;
+  }
+
   return false;
 }
 
-function a(component, node_index, degree, iteration) {
-  if (iteration == 1) {
-    let found = b(component, node_index, degree);
-    return found;
-  } else {
-    for (let node_to_remove of component) {
-      let component_to_check = component.filter((n) => n != node_to_remove);
-      let found = a(component_to_check, node_index, degree, iteration - 1);
-      if (found) {
-        if (node_info[node_to_remove].vcn_degree == null) {
-          // if this node has already a degree it's fine, but if it has not, it's already possible to assign the current degree
-          node_info[node_to_remove].vcn_degree = degree;
+function _find_children(component, black_list, degree, loop) {
+  if (loop == degree - 1) {
+    let orphans = [];
+    for (let node of component) {
+      if (node_info[node].vcn_degree >= degree) { // vcn with lower degree are not suitable matches
+        if (is_child(node, component, black_list)) {
+          let children = new Set();
+          children.add(node)
+          orphans.push(children);
         }
-        return true;
       }
     }
-    return false;
+
+    return orphans.length > 0 ? orphans : null;
+  }
+  else {
+    let families = [];
+
+    for (let node of component) {
+      if (node_info[node].vcn_degree >= degree) { // vcn with lower degree are not suitable matches
+        let subcomponent = new Set(component);
+        subcomponent.delete(node);
+
+        let temp_black_list = [...black_list];
+        temp_black_list.push(node);
+
+        // list of set
+        let orphans = _find_children(subcomponent, temp_black_list, degree, loop + 1);
+
+        if (orphans == null) {
+          continue;
+        }
+
+        for (let children of orphans) { // todo: generalize for n
+          children.add(node);
+          families.push(children);
+        }
+      }
+    }
+
+    families = remove_duplicate_set(families);
+
+    return families.length > 0 ? families : null;
   }
 }
 
-function init_vcn_degree(node_index, degree) {
-  let component = new Set();
-  if (node_info[node_index].neighbors.length == 0) {
-    //should not enter at all, change this
-    return;
+function find_children(parent) {
+  if (node_info[parent].vcn_degree <= 1 || node_info[parent].vcn_degree == null) {
+    return null;
   }
-  let starting_neighbor = node_info[node_index].neighbors[0]; // init second largest component and n component
-  component = get_component_minus_node(
-    component,
-    node_index,
-    starting_neighbor
-  );
 
-  if (degree > 1) {
-    a(component, node_index, degree, degree);
-  } else {
-    b(component, node_index, degree);
+  let subcomponent = get_subcomponent(new Set(), [parent], node_info[parent].neighbors[0]);
+  let degree = node_info[parent].vcn_degree;
+  let children = _find_children(subcomponent, [parent], degree, 1);
+
+  if (children == null) {
+    console.error("no children found");
   }
+
+  return children;
 }
+
+/*******************************/
+
 
 function init(corridor) {
   id_key = "OBJECTID"; //todo: generalize
@@ -132,23 +200,6 @@ function init(corridor) {
   }
   t1 = performance.now();
   console.log("init component: " + (t1 - t0) / 1000);
-  /*
-  t0 = performance.now();
-  let degree = 1;
-  let condition = true;
-  while (condition) {
-    for (let node_index = 0; node_index < n_nodes; node_index++) {
-      if (node_info[node_index].vcn_degree == null) {
-        //&& con vicini o con disposizione vicini che possono creare vcn
-        init_vcn_degree(node_index, degree);
-      }
-    }
-    degree++;
-    condition = degree == 3; //tutti hanno un grado o raggiunto grado massimo o null senza vicini o con disposizione vicini che non creano mai vcn
-  }
-  t1 = performance.now();
-  console.log("init vcn degree: " + (t1 - t0) / 1000);
-  */
 }
 
 function n_cutnode() {
