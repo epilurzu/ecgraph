@@ -213,6 +213,7 @@ function init(corridor) {
   file_name_key = Object.keys(corridor.objects)[0];
   n_nodes = corridor.objects[file_name_key].geometries.length;
 
+  /*
   let n_components = 0;
   let t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
@@ -249,11 +250,14 @@ function init(corridor) {
   }
   t1 = performance.now();
   console.log("init cut nodes" + (t1 - t0) / 1000);
+  */
 }
 
 export function compute_vcn(corridor) {
   //let t0 = performance.now();
+  read_json();
   init(corridor);
+  //write_json()
   //let t1 = performance.now();
   n_nodes_with_degree(-1);
   n_nodes_with_degree(0);
@@ -275,6 +279,22 @@ function n_nodes_with_degree(degree) {
     }
   }
   console.log(degree + ": " + counter);
+}
+
+function read_json() {
+  const fs = require("fs");
+  let rawdata = fs.readFileSync("src/components/core/node_info.json");
+  let data = JSON.parse(rawdata);
+
+  for (let node of data) {
+    node_info.push(node);
+  }
+}
+
+function write_json() {
+  const fs = require("fs");
+  let data = JSON.stringify(node_info);
+  fs.writeFileSync("src/components/core/node_info.json", data);
 }
 
 /***** FOR QUICK DEBUG *****/
