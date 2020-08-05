@@ -9,6 +9,10 @@ var file_name_key = null; // Corr_Dec_1
 var n_nodes = null;
 const node_info = [];
 
+function get_id(corridor, node) {
+  return corridor.objects[file_name_key].geometries[node].properties[id_key]
+}
+
 function init_node(node_index) {
   node_info[node_index] = {
     component: null, // component containing this node
