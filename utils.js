@@ -113,7 +113,7 @@ function _find_children(component, black_list, degree, loop) {
   if (loop == degree - 1) {
     let orphans = [];
     for (let node of component) {
-      if (node_info[node].vcn_degree >= degree) { // vcn with lower degree are not suitable matches
+      if (node_info[node].vcn_degree == degree) { // vcn with lower degree are not suitable matches
         if (is_child(node, component, black_list)) {
           let children = new Set();
           children.add(node)
@@ -128,7 +128,7 @@ function _find_children(component, black_list, degree, loop) {
     let families = [];
 
     for (let node of component) {
-      if (node_info[node].vcn_degree >= degree) { // vcn with lower degree are not suitable matches
+      if (node_info[node].vcn_degree == degree) { // vcn with lower degree are not suitable matches
         let subcomponent = new Set(component);
         subcomponent.delete(node);
 
@@ -214,10 +214,77 @@ function init_cut_node(node_to_check) {
 
 /*******************************/
 
+function init_vcn_degree(parent, degree, internal_neighbors = new Set([parent]), distance = 0, max_distance = 100, black_list = new Set([parent])) {
+  let component = get_component(new Set(), parent)
+
+  if (distance == max_distance) {
+    return;
+  }
+
+  let external_neighbors = new Set();
+
+  for (let node of internal_neighbors) {
+    for (let neighbor of node_info[node].neighbors) {
+      if (!black_list.has(neighbor)) {
+        black_list.add(neighbor)
+        external_neighbors.add(neighbor);
+      }
+    }
+  }
+
+  if (external_neighbors.size == 0) {
+    return;
+  }
+
+  for (let possible_child of external_neighbors) {
+    if (node_info[possible_child].vcn_degree != degree && node_info[possible_child].vcn_degree != null) {
+      continue;
+    }
+
+    let starting_node = null;
+    let possible_vcn = [parent, possible_child];
+    loop:
+    for (let node of possible_vcn) {
+      for (let neighbor of node_info[node].neighbors) {
+        if (!possible_vcn.includes(neighbor)) {
+          starting_node = neighbor;
+          break loop;
+        }
+      }
+    }
+
+    if (starting_node == null) {
+      continue;
+    }
+
+    let subcomponent = get_subcomponent(new Set(), possible_vcn, starting_node);
+
+    if (subcomponent.size < (component.size - degree)) {
+      for (let node of possible_vcn) {
+
+        if (distance > 5) {
+          console.log(distance)
+        }
+
+
+        node_info[node].vcn_degree = degree;
+
+        if (distance > 5) {
+          console.log(get_id(node))
+        }
+      }
+      return;
+    }
+  }
+
+  return init_vcn_degree(parent, degree, external_neighbors, distance + 1, max_distance, black_list);
+}
+
 function init() {
   id_key = "OBJECTID"; //todo: generalize
   file_name_key = Object.keys(corridor.objects)[0];
   n_nodes = corridor.objects[file_name_key].geometries.length;
+  //let max_degree = 4;
 
   /*
   let n_components = 0;
@@ -257,6 +324,18 @@ function init() {
   t1 = performance.now();
   console.log("init cut nodes" + (t1 - t0) / 1000);
   */
+  let t0 = performance.now();
+  //for (let degree = 2; degree < max_degree; degree++) {
+  for (let node_index = 0; node_index < n_nodes; node_index++) {
+    if (node_info[node_index].vcn_degree == null) {
+      init_vcn_degree(node_index, 2);
+      console.log("a")
+    }
+  }
+  //}
+  let t1 = performance.now();
+  console.log("init vcn degree" + (t1 - t0) / 1000);
+
 }
 
 export function compute_vcn(_corridor) {
