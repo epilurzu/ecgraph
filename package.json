@@ -1,0 +1,28 @@
+{
+  "name": "ecgraph",
+  "version": "1.0.0",
+  "description": "Extracts useful information from an ecological corridor and inject them into the topojson file",
+  "main": "./src/index.js",
+  "bin": {
+    "ecgraph": "./bin/ecgraph"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cli",
+    "ecgraph",
+    "ecg",
+    "ecological corridor"
+  ],
+  "author": "Enrico Podda <e.ipodda@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "esm": "^3.2.25",
+    "file-system": "^2.2.2",
+    "topojson-client": "^3.1.0"
+  }
+}

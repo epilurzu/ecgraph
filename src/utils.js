@@ -1,4 +1,6 @@
 import * as topojson from "topojson-client";
+const { performance } = require('perf_hooks');
+
 
 var corridor = null;
 
@@ -286,7 +288,7 @@ function init() {
   n_nodes = corridor.objects[file_name_key].geometries.length;
   //let max_degree = 4;
 
-  /*
+
   let n_components = 0;
   let t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
@@ -294,7 +296,7 @@ function init() {
   }
   let t1 = performance.now();
   console.log("init node: " + (t1 - t0) / 1000);
-
+  /*
   t0 = performance.now();
   for (let node_index = 0; node_index < n_nodes; node_index++) {
     if (node_info[node_index].component == null) {
@@ -323,7 +325,7 @@ function init() {
   }
   t1 = performance.now();
   console.log("init cut nodes" + (t1 - t0) / 1000);
-  */
+  
   let t0 = performance.now();
   //for (let degree = 2; degree < max_degree; degree++) {
   for (let node_index = 0; node_index < n_nodes; node_index++) {
@@ -335,12 +337,12 @@ function init() {
   //}
   let t1 = performance.now();
   console.log("init vcn degree" + (t1 - t0) / 1000);
-
+  */
 }
 
-export function compute_vcn(_corridor) {
+export default function compute_vcn(_corridor) {
   //let t0 = performance.now();
-  read_json();
+  //read_json();
   corridor = _corridor;
   init();
   //write_json()
