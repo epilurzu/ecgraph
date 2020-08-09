@@ -21,6 +21,7 @@ ___
 git clone https://github.com/epilurzu/ecgraph.git
 cd ecgraph
 npm i
+npm link
 ```
 
 ## :video_game: Usage
@@ -28,7 +29,7 @@ npm i
 More instruction will come.
 
 ```bash
-ecgraph path/to/topojson/ecological_corridor.json
+ecgraph path/to/topojson/ecological_corridor.json "PRIMARY_KEY_NAME"
 ```
 
 ## :chart_with_upwards_trend: Development
