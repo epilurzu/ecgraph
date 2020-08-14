@@ -52,21 +52,33 @@ export default class Component {
     }
 
     spot_appendix() {
-        let found_appendix = true;
-
-        while (found_appendix) {
-            found_appendix = false;
-            for (let [id, node] of Object.entries(this.nodes)) {
-                if (node.vcn_degree == null) {
-                    if (node.neighbors.size == 1) {
-                        node.vcn_degree = APPENDIX;
-                        found_appendix = true;
-                    }
+        for (let [id, node] of Object.entries(this.nodes)) {
+            if (node.vcn_degree == null) {
+                if (node.neighbors.size == 1) {
+                    this.set_appendix(id);
                 }
             }
-            // TODO: quick fix, it can't be iterate before spot neighbors_areas
-            // TODO: It can also be optimised starting from actual appendix
-            found_appendix = false;
+        }
+    }
+
+    set_appendix(_node_id) {
+        this.nodes[_node_id].vcn_degree = APPENDIX;
+
+        for (let neighbor_d1 of this.nodes[_node_id].neighbors) {
+            if (this.nodes[neighbor_d1].vcn_degree == null) {
+                let not_appendix_neighbors = 0;
+                for (let neighbor_d2 of this.nodes[neighbor_d1].neighbors) {
+                    if (this.nodes[neighbor_d2].vcn_degree != APPENDIX) {
+                        not_appendix_neighbors++;
+                        if (not_appendix_neighbors > 1) {
+                            break;
+                        }
+                    }
+                }
+                if (not_appendix_neighbors < 2) {
+                    this.set_appendix(neighbor_d1);
+                }
+            }
         }
     }
 
