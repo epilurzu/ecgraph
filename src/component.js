@@ -1,7 +1,8 @@
 import Node from "./node";
 
-var ALONE = 0;
+var NEIGHBOR_OF_AREA = 0;
 var APPENDIX = -1;
+var ALONE = -2;
 
 export default class Component {
     constructor(_id, _node_id, _all_neighbors) {
@@ -101,6 +102,11 @@ export default class Component {
         }
 
         return subcomponent;
+    }
+
+    set_neighbor_area(_node_id, _area_id) {
+        this.nodes[_node_id].vcn_degree = NEIGHBOR_OF_AREA;
+        this.nodes[_node_id].neighbors_areas.add(_area_id);
     }
 
     get_node(_node_id) {
