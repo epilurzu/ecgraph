@@ -17,7 +17,7 @@ var primary_key = null;
 var components = new Set();
 var num_components = null;
 
-export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = "OBJECTID", weight = 0.00001) {
+export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = null, accuracy = 0.00001) {
     corridor_raw = _corridor_raw;
     file_name = get_file_name();
     all_neighbors = get_all_neighbors();
@@ -25,15 +25,15 @@ export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = "OBJEC
     num_nodes = get_raw_nodes().length;
 
     init_components();
-    assign_areas(_areas_raw, weight);
+    assign_areas(_areas_raw, accuracy);
     init_vcn();
 
     count();
 }
 
-function assign_areas(_areas_raw, _weight) {
-    let corridor = get_simpler_features(corridor_raw, _weight);
-    let areas = get_simpler_features(_areas_raw, _weight);
+function assign_areas(_areas_raw, _accuracy) {
+    let corridor = get_simpler_features(corridor_raw, _accuracy);
+    let areas = get_simpler_features(_areas_raw, _accuracy);
     areas = filter_areas(get_bounding_box(corridor), areas);
 
     const progress_bar = new cliProgress.SingleBar({ format: 'Assign Areas\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
@@ -70,9 +70,9 @@ function assign_areas(_areas_raw, _weight) {
 }
 
 //TODO: move to utils
-function get_simpler_features(_topology, _weight) {
+function get_simpler_features(_topology, _accuracy) {
     let ps = topojson_simplify.presimplify(_topology);
-    let sp = topojson_simplify.simplify(ps, _weight);
+    let sp = topojson_simplify.simplify(ps, _accuracy);
     return topojson_client.feature(sp, sp.objects[Object.keys(sp.objects)[0]]);
 }
 
