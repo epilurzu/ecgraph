@@ -17,7 +17,7 @@ var primary_key = null;
 var components = new Set();
 var num_components = null;
 
-export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = null, accuracy = 0.00001) {
+export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = null, accuracy = 0.00001, max_degree = 2, max_distance = 3) {
     corridor_raw = _corridor_raw;
     file_name = get_file_name();
     all_neighbors = get_all_neighbors();
@@ -26,7 +26,8 @@ export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = null, 
 
     init_components();
     assign_areas(_areas_raw, accuracy);
-    init_vcn();
+    init_vcn_low_degree();
+    init_vcn_high_degree(max_degree, max_distance);
 
     count();
 }
@@ -147,15 +148,28 @@ function filter_areas(_bounding_box, _areas) {
 
 function count() {
 
-    var neighbor_of_area = 0;
+    let still_null = 0
+    let neighbor_of_area = 0;
     let appendix = 0;
     let alone = 0;
     let cutnode = 0;
+    let vcn_d2 = 0;
+    let vcn_d3 = 0;
+    let vcn_d4 = 0;
 
     for (let component of components) {
         for (let [id, node] of Object.entries(component.nodes)) {
             if (node == undefined)
                 continue;
+
+            if (node.vcn_degree == 4)
+                vcn_d4++;
+
+            if (node.vcn_degree == 3)
+                vcn_d3++;
+
+            if (node.vcn_degree == 2)
+                vcn_d2++;
 
             if (node.vcn_degree == 1)
                 cutnode++;
@@ -169,14 +183,21 @@ function count() {
             if (node.vcn_degree == -2)
                 alone++;
 
+            if (node.vcn_degree == null)
+                still_null++;
+
 
         }
     }
 
-    console.log("cutnode:\t\t" + cutnode)
-    console.log("neighbor of area:\t" + neighbor_of_area)
-    console.log("appendix:\t\t" + appendix)
-    console.log("alone:\t\t\t" + alone)
+    console.log("vcn degree 4:    \t" + vcn_d4);
+    console.log("vcn degree 3:    \t" + vcn_d3);
+    console.log("vcn degree 2:    \t" + vcn_d2);
+    console.log("cutnode:         \t" + cutnode);
+    console.log("neighbor of area:\t" + neighbor_of_area);
+    console.log("appendix:        \t" + appendix);
+    console.log("alone:           \t" + alone);
+    console.log("null:            \t" + still_null);
 }
 
 function init_components() {
@@ -202,15 +223,27 @@ function init_components() {
     num_components = components.size;
 }
 
-function init_vcn() {
+function init_vcn_low_degree() {
     const progress_bar = new cliProgress.SingleBar({ format: 'Cut nodes\t{bar} {percentage}% | Time: {duration} s |  Component: {value}/{total}' }, cliProgress.Presets.shades_classic);
     progress_bar.start(num_components, 0);
 
-    loop:
     for (let component of components) {
         progress_bar.increment();
 
-        component.set_vcn_degree();
+        component.set_vcn_low_degree();
+    }
+
+    progress_bar.stop();
+}
+
+function init_vcn_high_degree(_max_degree, _max_distance) {
+    const progress_bar = new cliProgress.SingleBar({ format: 'vcn\t\t{bar} {percentage}% | Time: {duration} s |  Component: {value}/{total}' }, cliProgress.Presets.shades_classic);
+    progress_bar.start(num_components, 0);
+
+    for (let component of components) {
+        progress_bar.increment();
+
+        component.set_vcn_high_degree(_max_degree, _max_distance);
     }
 
     progress_bar.stop();

@@ -32,7 +32,7 @@ export default class Component {
         return _all_neighbors[_node_id];
     }
 
-    set_vcn_degree() {
+    set_vcn_low_degree() {
 
         this.spot_alone();
 
@@ -116,6 +116,77 @@ export default class Component {
         return subcomponent;
     }
 
+    set_vcn_high_degree(_max_degree, _max_distance) {
+        for (let degree = 2; degree <= _max_degree; degree++) {
+            for (let [id, node] of Object.entries(this.nodes)) {
+                if (this.get_node(node.id).vcn_degree == null) {
+                    this.spot_vcn(node.id, degree, _max_distance);
+                }
+            }
+        }
+    }
+
+    spot_vcn(_parent, _degree, _max_distance) {
+        let neighbors = this.get_valid_neighborhood(_parent, _degree, _max_distance);
+        let families = this.generateCombinations([...neighbors], _degree - 1);
+
+        for (let family of families) {
+            let possible_vcn = new Set(family);
+            possible_vcn.add(_parent);
+
+            let starting_node = this.get_starting_node(possible_vcn);
+            if (starting_node == null) {
+                continue;
+            }
+
+            let subcomponent = this.get_subcomponent(starting_node, possible_vcn);
+            if (subcomponent.size < (this.size - _degree)) {
+                for (let node_id of possible_vcn) {
+                    this.get_node(node_id).vcn_degree = _degree;
+                }
+                break;
+            }
+        }
+    }
+
+    get_valid_neighborhood(_parent, _degree, _max_distance, distance = 0, neighborhood = new Set(), last_row = null) {
+        if (distance == _max_distance) {
+            return neighborhood;
+        }
+
+        if (last_row == null) {
+            last_row = new Set(this.get_node(_parent).neighbors);
+        }
+
+        let next_row = new Set();
+
+        for (let node_id of last_row) {
+            let neighbors = this.get_node(node_id).neighbors;
+            for (let neighbor of neighbors) {
+                if (this.get_node(neighbor).vcn_degree == null || this.get_node(neighbor).vcn_degree == _degree) {
+                    if (neighbor != _parent) {
+                        neighborhood.add(neighbor);
+                        next_row.add(neighbor);
+                    }
+                }
+            }
+        }
+
+        return this.get_valid_neighborhood(_parent, _degree, _max_distance, distance + 1, neighborhood, next_row);
+    }
+
+    get_starting_node(_possible_vcn) {
+        for (let node_id of _possible_vcn) {
+            for (let neighbor of this.nodes[node_id].neighbors) {
+                if (!_possible_vcn.has(neighbor)) {
+                    return neighbor;
+                }
+            }
+        }
+
+        return null;
+    }
+
     set_neighbor_area(_node_id, _area_id) {
         this.nodes[_node_id].vcn_degree = NEIGHBOR_OF_AREA;
         this.nodes[_node_id].neighbors_areas.add(_area_id);
@@ -137,6 +208,39 @@ export default class Component {
 
     contains(_node_id) {
         return this.nodes[_node_id] != undefined;
+    }
+
+    //TODO: move to utils
+    generateCombinations(sourceArray, comboLength) {
+        const sourceLength = sourceArray.length;
+        if (comboLength > sourceLength) return [];
+
+        const combos = []; // Stores valid combinations as they are generated.
+
+        // Accepts a partial combination, an index into sourceArray, 
+        // and the number of elements required to be added to create a full-length combination.
+        // Called recursively to build combinations, adding subsequent elements at each call depth.
+        const makeNextCombos = (workingCombo, currentIndex, remainingCount) => {
+            const oneAwayFromComboLength = remainingCount == 1;
+
+            // For each element that remaines to be added to the working combination.
+            for (let sourceIndex = currentIndex; sourceIndex < sourceLength; sourceIndex++) {
+                // Get next (possibly partial) combination.
+                const next = [...workingCombo, sourceArray[sourceIndex]];
+
+                if (oneAwayFromComboLength) {
+                    // Combo of right length found, save it.
+                    combos.push(next);
+                }
+                else {
+                    // Otherwise go deeper to add more elements to the current partial combination.
+                    makeNextCombos(next, sourceIndex + 1, remainingCount - 1);
+                }
+            }
+        }
+
+        makeNextCombos([], 0, comboLength);
+        return combos;
     }
 }
 
