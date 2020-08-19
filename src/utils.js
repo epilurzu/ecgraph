@@ -1,388 +1,114 @@
-import * as topojson from "topojson-client";
-const { performance } = require('perf_hooks');
+import * as topojson_server from "topojson-server";
+import * as topojson_client from "topojson-client";
+import * as topojson_simplify from "topojson-simplify";
+import { bboxPolygon } from "turf";
 
-
-var corridor = null;
-
-var ALONE = 0;
-var APPENDIX = -1;
-
-var id_key = null;
-var file_name_key = null; // Corr_Dec_1
-
-var n_nodes = null;
-const node_info = [];
-
-function get_id(node) {
-  return corridor.objects[file_name_key].geometries[node].properties[id_key]
+export function get_id(_node_id, _primary_key, _corridor_raw) {
+  return _corridor_raw.objects[get_file_name(_corridor_raw)].geometries[_node_id].properties[_primary_key];
 }
 
-function init_node(node_index) {
-  node_info[node_index] = {
-    component: null, // component containing this node
-    neighbors: null, // pleonastic, isn't it?
-    neighbor_area: null, // adjacent area, if null, it doesn't have any
-    vcn_degree: null, // means "virtual cut node degree", if 1 it is a cut node, if null it hasn't been calculated
-    n_components_ar: null, // means "number of components after removal", they are resulting from this virtual cut node removal
-    slc_size_ar: null, // means "second largest component size after removal", it is resulting from this virtual cut node removal
-    min_steps_fna: null, // means "minimum steps from nearest area"
-    n_shortest_path_in: null, // means "number of shortest path that involve the node", higher is better
-    //TODO: chindren_vcn: null,  // means "children virtual cut nodes"
-    //TODO: enclave: null,  // is it really helpful?
-    //TODO: nb_centrality: null, // is it really helpful?
-    score: null,
-  };
+export function get_file_name(_corridor_raw) {
+  return Object.keys(_corridor_raw.objects)[0];
 }
 
-function init_neighbors(node_index, neighbors) {
-  node_info[node_index].neighbors = neighbors;
+export function get_all_neighbors(_corridor_raw) {
+  return topojson_client.neighbors(get_raw_nodes(_corridor_raw));
 }
 
-function init_component(node_index, component_index) {
-  node_info[node_index].component = component_index;
+export function certify_key(_corridor_raw, primary_key) {
+  let keys = new Set();
 
-  let neighbors = null;
-  if (node_info[node_index].neighbors != null) {
-    neighbors = node_info[node_index].neighbors;
-  } else {
-    neighbors = topojson.neighbors(corridor.objects[file_name_key].geometries)[
-      node_index
-    ];
-    init_neighbors(node_index, neighbors);
-  }
+  for (let node of get_raw_nodes(_corridor_raw)) {
+    let key = node.properties[primary_key];
 
-  for (let neighbor of neighbors) {
-    if (node_info[neighbor].component == null) {
-      init_component(neighbor, component_index);
-    }
-  }
-}
-
-/*******************************/
-
-function is_equal_set(as, bs) {
-  if (as.size !== bs.size) return false;
-  for (var a of as) if (!bs.has(a)) return false;
-  return true;
-}
-
-function remove_duplicate_set(list) {
-  let final_list = [];
-
-  for (let a_set of list) {
-    let contains = false;
-    for (let b_set of final_list) {
-      if (is_equal_set(b_set, a_set)) {
-        contains = true;
-        break;
-      }
-    }
-    if (!contains) {
-      final_list.push(a_set);
-    }
-  }
-  return final_list;
-}
-
-function is_child(possible_child, component, black_list) {
-  let starting_node = null;
-  let temp_black_list = [...black_list];
-  temp_black_list.push(possible_child);
-  loop:
-  for (let node of temp_black_list) {
-    for (let neighbor of node_info[node].neighbors) {
-      if (!temp_black_list.includes(neighbor)) {
-        starting_node = neighbor;
-        break loop;
-      }
-    }
-  }
-
-  if (starting_node == null) {
-    return false;
-  }
-
-  let subcomponent = get_subcomponent(new Set(), temp_black_list, starting_node);
-
-  if (subcomponent.size < component.size - 1) {
-    return true;
-  }
-
-  return false;
-}
-
-function _find_children(component, black_list, degree, loop) {
-  if (loop == degree - 1) {
-    let orphans = [];
-    for (let node of component) {
-      if (node_info[node].vcn_degree == degree) { // vcn with lower degree are not suitable matches
-        if (is_child(node, component, black_list)) {
-          let children = new Set();
-          children.add(node)
-          orphans.push(children);
-        }
-      }
+    if (keys.has(key)) {  // TOOD: if null, use index
+      return null;
     }
 
-    return orphans.length > 0 ? orphans : null;
+    keys.add(key);
   }
-  else {
-    let families = [];
 
-    for (let node of component) {
-      if (node_info[node].vcn_degree == degree) { // vcn with lower degree are not suitable matches
-        let subcomponent = new Set(component);
-        subcomponent.delete(node);
-
-        let temp_black_list = [...black_list];
-        temp_black_list.push(node);
-
-        // list of set
-        let orphans = _find_children(subcomponent, temp_black_list, degree, loop + 1);
-
-        if (orphans == null) {
-          continue;
-        }
-
-        for (let children of orphans) { // todo: generalize for n
-          children.add(node);
-          families.push(children);
-        }
-      }
-    }
-
-    families = remove_duplicate_set(families);
-
-    return families.length > 0 ? families : null;
-  }
+  return primary_key;
 }
 
-function find_children(parent) {
-  if (node_info[parent].vcn_degree <= 1 || node_info[parent].vcn_degree == null) {
-    return null;
-  }
-
-  let subcomponent = get_subcomponent(new Set(), [parent], node_info[parent].neighbors[0]);
-  let degree = node_info[parent].vcn_degree;
-  let children = _find_children(subcomponent, [parent], degree, 1);
-
-  if (children == null) {
-    console.error("no children found");
-  }
-
-  return children;
+export function get_raw_nodes(_corridor_raw) {
+  return _corridor_raw.objects[get_file_name(_corridor_raw)].geometries;
 }
 
-/*******************************/
+export function get_bounding_box(_layer) {
+  let min_x = 999;
+  let min_y = 999;
+  let max_x = -999;
+  let max_y = -999;
 
-function get_subcomponent(component, nodes_to_remove, node_index) {
-  component.add(node_index);
-
-  let neighbors_to_check = node_info[node_index].neighbors;
-  neighbors_to_check = neighbors_to_check.filter((n) => !nodes_to_remove.includes(n));
-
-  for (let neighbor of neighbors_to_check) {
-    if (!component.has(neighbor)) {
-      component = get_subcomponent(component, nodes_to_remove, neighbor);
-    }
-  }
-
-  return component;
-}
-
-function get_component(component, node_to_add) {
-  component.add(node_to_add);
-  let neighbors = node_info[node_to_add].neighbors;
-
-  for (let neighbor of neighbors) {
-    if (!component.has(neighbor)) {
-      component = get_component(component, neighbor);
-    }
-  }
-
-  return component;
-}
-
-function init_cut_node(node_to_check) {
-  let component = get_component(new Set(), node_to_check);
-  let starting_node = node_info[node_to_check].neighbors[0];
-  let subcomponent = get_subcomponent(new Set(), [node_to_check], starting_node); //if exist
-
-  if (subcomponent.size < (component.size - 1)) {
-    node_info[node_to_check].vcn_degree = 1;
-    return;
-  }
-}
-
-/*******************************/
-
-function init_vcn_degree(parent, degree, internal_neighbors = new Set([parent]), distance = 0, max_distance = 100, black_list = new Set([parent])) {
-  let component = get_component(new Set(), parent)
-
-  if (distance == max_distance) {
-    return;
-  }
-
-  let external_neighbors = new Set();
-
-  for (let node of internal_neighbors) {
-    for (let neighbor of node_info[node].neighbors) {
-      if (!black_list.has(neighbor)) {
-        black_list.add(neighbor)
-        external_neighbors.add(neighbor);
-      }
-    }
-  }
-
-  if (external_neighbors.size == 0) {
-    return;
-  }
-
-  for (let possible_child of external_neighbors) {
-    if (node_info[possible_child].vcn_degree != degree && node_info[possible_child].vcn_degree != null) {
+  for (let patch of _layer.features) {
+    if (patch.geometry == null) {
       continue;
     }
 
-    let starting_node = null;
-    let possible_vcn = [parent, possible_child];
-    loop:
-    for (let node of possible_vcn) {
-      for (let neighbor of node_info[node].neighbors) {
-        if (!possible_vcn.includes(neighbor)) {
-          starting_node = neighbor;
-          break loop;
+    for (let poligon of patch.geometry.coordinates) { // TODO: generalize
+      for (let point of poligon) {
+        let x = point[0];
+        let y = point[1];
+
+        if (x > max_x) {
+          max_x = x;
+        }
+        else if (x < min_x) {
+          min_x = x;
+        }
+
+        if (y > max_y) {
+          max_y = y;
+        }
+        else if (y < min_y) {
+          min_y = y;
         }
       }
     }
+  }
 
-    if (starting_node == null) {
-      continue;
-    }
+  let bbox = [min_x, min_y, max_x, max_y];
 
-    let subcomponent = get_subcomponent(new Set(), possible_vcn, starting_node);
+  return bboxPolygon(bbox);
+}
 
-    if (subcomponent.size < (component.size - degree)) {
-      for (let node of possible_vcn) {
+export function get_simpler_features(_topology, _accuracy) {
+  let ps = topojson_simplify.presimplify(_topology);
+  let sp = topojson_simplify.simplify(ps, _accuracy);
+  return get_features(sp);
+}
 
-        if (distance > 5) {
-          console.log(distance)
-        }
+export function get_features(_topology) {
+  return topojson_client.feature(_topology, _topology.objects[Object.keys(_topology.objects)[0]]);
+}
 
+export function get_topology(_features) {
+  return topojson_server.topology({ foo: _features });
+}
 
-        node_info[node].vcn_degree = degree;
+// return every combination of elements in source_array in arrays of length combo_length 
+export function generate_combinations(source_array, combo_length) {
+  const source_length = source_array.length;
+  if (combo_length > source_length) return [];
 
-        if (distance > 5) {
-          console.log(get_id(node))
-        }
+  const combos = [];
+
+  const makeNextCombos = (working_combo, current_index, remaining_count) => {
+    const one_away_from_combo_length = remaining_count == 1;
+
+    for (let source_index = current_index; source_index < source_length; source_index++) {
+      const next = [...working_combo, source_array[source_index]];
+
+      if (one_away_from_combo_length) {
+        combos.push(next);
       }
-      return;
-    }
-  }
-
-  return init_vcn_degree(parent, degree, external_neighbors, distance + 1, max_distance, black_list);
-}
-
-function init() {
-  id_key = "OBJECTID"; //todo: generalize
-  file_name_key = Object.keys(corridor.objects)[0];
-  n_nodes = corridor.objects[file_name_key].geometries.length;
-  //let max_degree = 4;
-
-
-  let n_components = 0;
-  let t0 = performance.now();
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    init_node(node_index);
-  }
-  let t1 = performance.now();
-  console.log("init node: " + (t1 - t0) / 1000);
-  /*
-  t0 = performance.now();
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].component == null) {
-      init_component(node_index, n_components);
-      n_components++;
-    }
-  }
-  t1 = performance.now();
-  console.log("init component: " + (t1 - t0) / 1000);
-
-  t0 = performance.now();
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].vcn_degree == null) {
-      if (node_info[node_index].neighbors.length == 0) {
-        node_info[node_index].vcn_degree = ALONE;
-        continue;
+      else {
+        makeNextCombos(next, source_index + 1, remaining_count - 1);
       }
-
-      if (node_info[node_index].neighbors.length == 1) {
-        node_info[node_index].vcn_degree = APPENDIX; // TODO: do while there are no more, post neighbour_areas
-        continue;
-      }
-
-      init_cut_node(node_index);
     }
   }
-  t1 = performance.now();
-  console.log("init cut nodes" + (t1 - t0) / 1000);
-  
-  let t0 = performance.now();
-  //for (let degree = 2; degree < max_degree; degree++) {
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].vcn_degree == null) {
-      init_vcn_degree(node_index, 2);
-      console.log("a")
-    }
-  }
-  //}
-  let t1 = performance.now();
-  console.log("init vcn degree" + (t1 - t0) / 1000);
-  */
+
+  makeNextCombos([], 0, combo_length);
+  return combos;
 }
-
-export default function compute_vcn(_corridor) {
-  //let t0 = performance.now();
-  //read_json();
-  corridor = _corridor;
-  init();
-  //write_json()
-  //let t1 = performance.now();
-  n_nodes_with_degree(-1);
-  n_nodes_with_degree(0);
-  n_nodes_with_degree(1);
-  n_nodes_with_degree(2);
-  n_nodes_with_degree(3);
-  n_nodes_with_degree(4);
-  console.log(node_info);
-  //console.log((t1 - t0) / 1000);
-}
-
-/***** FOR QUICK DEBUG *****/
-
-function n_nodes_with_degree(degree) {
-  let counter = 0;
-  for (let node_index = 0; node_index < n_nodes; node_index++) {
-    if (node_info[node_index].vcn_degree == degree) {
-      counter++;
-    }
-  }
-  console.log(degree + ": " + counter);
-}
-
-function read_json() {
-  const fs = require("fs");
-  let rawdata = fs.readFileSync("src/components/core/node_info.json");
-  let data = JSON.parse(rawdata);
-
-  for (let node of data) {
-    node_info.push(node);
-  }
-}
-
-function write_json() {
-  const fs = require("fs");
-  let data = JSON.stringify(node_info);
-  fs.writeFileSync("src/components/core/node_info.json", data);
-}
-
-/***** FOR QUICK DEBUG *****/

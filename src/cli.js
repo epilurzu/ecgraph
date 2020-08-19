@@ -1,6 +1,5 @@
 import fs from "file-system";
-import ecgraph from "./ecgraph";
-
+import ECGraph from "./ecgraph";
 
 export function cli(args) {
     let corridor_raw = fs.readFileSync(args[2]);
@@ -13,5 +12,5 @@ export function cli(args) {
 
     let accuracy = args[5];
 
-    ecgraph(corridor, areas, primary_key, accuracy);
+    let ecgrapg = new ECGraph(corridor, areas, primary_key, accuracy);
 }

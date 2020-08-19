@@ -1,3 +1,5 @@
+import { generate_combinations } from "./utils";
+
 import Node from "./node";
 
 var NEIGHBOR_OF_AREA = 0;
@@ -11,11 +13,11 @@ export default class Component {
         this.size = 0;
 
         this.init(_node_id, _all_neighbors);
-
     }
 
+    /*** component initialization ***/
     init(_node_id, _all_neighbors) {
-        let neighbors = this.get_neighbors(_node_id, _all_neighbors);
+        let neighbors = this.get_neighbors_from_all(_node_id, _all_neighbors);
 
         let node = new Node(_node_id, this.id, neighbors);
 
@@ -28,47 +30,32 @@ export default class Component {
         }
     }
 
-    get_neighbors(_node_id, _all_neighbors) {
+    get_neighbors_from_all(_node_id, _all_neighbors) {
         return _all_neighbors[_node_id];
     }
+    /*** end component initialization ***/
 
-    set_vcn_low_degree() {
-
-        this.spot_alone();
-
-        this.spot_appendix();
-
-        this.spot_cut_node();
-    }
-
-    spot_alone() {
-        for (let [id, node] of Object.entries(this.nodes)) {
-            if (node.vcn_degree == null) {
-                if (node.neighbors.size == 0) {
-                    node.vcn_degree = ALONE;
-                }
-            }
+    /*** spot and set nodes that are alone, appendix or cutnodes ***/
+    spot_alone(_node_id) {
+        if (this.get_node(_node_id).neighbors.size == 0) {
+            this.get_node(_node_id).vcn_degree = ALONE;
         }
     }
 
-    spot_appendix() {
-        for (let [id, node] of Object.entries(this.nodes)) {
-            if (node.vcn_degree == null) {
-                if (node.neighbors.size == 1) {
-                    this.set_appendix(id);
-                }
-            }
+    spot_appendix(_node_id) {
+        if (this.get_node(_node_id).neighbors.size == 1) {
+            this._spot_appendix(_node_id);
         }
     }
 
-    set_appendix(_node_id) {
-        this.nodes[_node_id].vcn_degree = APPENDIX;
+    _spot_appendix(_node_id) {
+        this.get_node(_node_id).vcn_degree = APPENDIX;
 
-        for (let neighbor_d1 of this.nodes[_node_id].neighbors) {
-            if (this.nodes[neighbor_d1].vcn_degree == null) {
+        for (let neighbor_first_line of this.get_node(_node_id).neighbors) {
+            if (this.get_node(neighbor_first_line).vcn_degree == null) {
                 let not_appendix_neighbors = 0;
-                for (let neighbor_d2 of this.nodes[neighbor_d1].neighbors) {
-                    if (this.nodes[neighbor_d2].vcn_degree != APPENDIX) {
+                for (let neighbor_second_line of this.get_node(neighbor_first_line).neighbors) {
+                    if (this.get_node(neighbor_second_line).vcn_degree != APPENDIX) {
                         not_appendix_neighbors++;
                         if (not_appendix_neighbors > 1) {
                             break;
@@ -76,19 +63,15 @@ export default class Component {
                     }
                 }
                 if (not_appendix_neighbors < 2) {
-                    this.set_appendix(neighbor_d1);
+                    this._spot_appendix(neighbor_first_line);
                 }
             }
         }
     }
 
-    spot_cut_node() {
-        for (let [id, node] of Object.entries(this.nodes)) {
-            if (node.vcn_degree == null) {
-                if (this.is_cutnode(node)) {
-                    node.vcn_degree = 1;
-                }
-            }
+    spot_cut_node(_node_id) {
+        if (this.is_cutnode(this.get_node(_node_id))) {
+            this.get_node(_node_id).vcn_degree = 1;
         }
     }
 
@@ -115,20 +98,12 @@ export default class Component {
 
         return subcomponent;
     }
+    /*** end spot and set nodes that are alone, appendix or cutnodes ***/
 
-    set_vcn_high_degree(_max_degree, _max_distance) {
-        for (let degree = 2; degree <= _max_degree; degree++) {
-            for (let [id, node] of Object.entries(this.nodes)) {
-                if (this.get_node(node.id).vcn_degree == null) {
-                    this.spot_vcn(node.id, degree, _max_distance);
-                }
-            }
-        }
-    }
-
+    /*** spot and set nodes that have degree 2 or more ***/
     spot_vcn(_parent, _degree, _max_distance) {
-        let neighbors = this.get_valid_neighborhood(_parent, _degree, _max_distance);
-        let families = this.generateCombinations([...neighbors], _degree - 1);
+        let possible_children = this.get_possible_children(_parent, _degree, _max_distance);
+        let families = generate_combinations([...possible_children], _degree - 1);
 
         for (let family of families) {
             let possible_vcn = new Set(family);
@@ -149,7 +124,8 @@ export default class Component {
         }
     }
 
-    get_valid_neighborhood(_parent, _degree, _max_distance, distance = 0, neighborhood = new Set(), last_row = null) {
+    // returns every neighbour inside _max_distance from _parent that has vcn_degree null, equal to _degree and is different from _parent
+    get_possible_children(_parent, _degree, _max_distance, distance = 0, neighborhood = new Set(), last_row = null) {
         if (distance == _max_distance) {
             return neighborhood;
         }
@@ -172,12 +148,12 @@ export default class Component {
             }
         }
 
-        return this.get_valid_neighborhood(_parent, _degree, _max_distance, distance + 1, neighborhood, next_row);
+        return this.get_possible_children(_parent, _degree, _max_distance, distance + 1, neighborhood, next_row);
     }
 
     get_starting_node(_possible_vcn) {
         for (let node_id of _possible_vcn) {
-            for (let neighbor of this.nodes[node_id].neighbors) {
+            for (let neighbor of this.get_node(node_id).neighbors) {
                 if (!_possible_vcn.has(neighbor)) {
                     return neighbor;
                 }
@@ -186,14 +162,15 @@ export default class Component {
 
         return null;
     }
-
-    set_neighbor_area(_node_id, _area_id) {
-        this.nodes[_node_id].vcn_degree = NEIGHBOR_OF_AREA;
-        this.nodes[_node_id].neighbors_areas.add(_area_id);
-    }
+    /*** end spot and set nodes that have degree 2 or more ***/
 
     get_node(_node_id) {
         return this.nodes[_node_id];
+    }
+
+    set_neighbor_area(_node_id, _area_id) {
+        this.get_node(_node_id).vcn_degree = NEIGHBOR_OF_AREA;
+        this.get_node(_node_id).neighbors_areas.add(_area_id);
     }
 
     add(_node) {
@@ -203,44 +180,11 @@ export default class Component {
 
     remove(_node) {
         this.size--;
-        delete this.nodes[_node.id];
+        delete this.get_node(_node.id);
     }
 
     contains(_node_id) {
-        return this.nodes[_node_id] != undefined;
-    }
-
-    //TODO: move to utils
-    generateCombinations(sourceArray, comboLength) {
-        const sourceLength = sourceArray.length;
-        if (comboLength > sourceLength) return [];
-
-        const combos = []; // Stores valid combinations as they are generated.
-
-        // Accepts a partial combination, an index into sourceArray, 
-        // and the number of elements required to be added to create a full-length combination.
-        // Called recursively to build combinations, adding subsequent elements at each call depth.
-        const makeNextCombos = (workingCombo, currentIndex, remainingCount) => {
-            const oneAwayFromComboLength = remainingCount == 1;
-
-            // For each element that remaines to be added to the working combination.
-            for (let sourceIndex = currentIndex; sourceIndex < sourceLength; sourceIndex++) {
-                // Get next (possibly partial) combination.
-                const next = [...workingCombo, sourceArray[sourceIndex]];
-
-                if (oneAwayFromComboLength) {
-                    // Combo of right length found, save it.
-                    combos.push(next);
-                }
-                else {
-                    // Otherwise go deeper to add more elements to the current partial combination.
-                    makeNextCombos(next, sourceIndex + 1, remainingCount - 1);
-                }
-            }
-        }
-
-        makeNextCombos([], 0, comboLength);
-        return combos;
+        return this.get_node(_node_id) != undefined;
     }
 }
 

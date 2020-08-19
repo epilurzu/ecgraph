@@ -1,286 +1,260 @@
-import * as turf from "turf";
-import * as topojson_client from "topojson-client";
-import * as topojson_simplify from "topojson-simplify";
+import { intersect } from "turf";
 import * as cliProgress from "cli-progress";
+
+import { get_id, certify_key, get_raw_nodes, get_all_neighbors, get_features, get_simpler_features, get_topology, get_bounding_box } from "./utils";
 import Component from "./component";
 
-var corridor_raw = null;
-var corridor_initialized = null;
-var corridor_updated = null;
+export default class ECGraph {
+    constructor(_corridor_topology, _areas_topology, _primary_key = null, accuracy = 0.00001, max_degree = 2, max_distance = 3) {
+        this.corridor_topology = _corridor_topology;
+        _corridor_topology = null;
+        this.primary_key = certify_key(this.corridor_topology, _primary_key);  // TOOD: if null, use index
+        this.num_nodes = get_raw_nodes(this.corridor_topology).length;
 
-var all_neighbors = [];
+        this.components = new Set();
+        this.init_components();
 
-var num_nodes = null;
+        this.areas_topology = this.filter_areas(_areas_topology, accuracy);
+        _areas_topology = null;
+        this.assign_areas(this.areas_topology, accuracy);
 
-var file_name = null;
-var primary_key = null;
-var components = new Set();
-var num_components = null;
+        this.init_vcn_low_degree();
+        this.init_vcn_high_degree(max_degree, max_distance);
 
-export default function ecgraph(_corridor_raw, _areas_raw, _primary_key = null, accuracy = 0.00001, max_degree = 2, max_distance = 3) {
-    corridor_raw = _corridor_raw;
-    file_name = get_file_name();
-    all_neighbors = get_all_neighbors();
-    primary_key = certify_key(_primary_key);  // TOOD: if null, use index
-    num_nodes = get_raw_nodes().length;
+        this.count();
+    }
 
-    init_components();
-    assign_areas(_areas_raw, accuracy);
-    init_vcn_low_degree();
-    init_vcn_high_degree(max_degree, max_distance);
+    init_components() {
+        let progress_bar = new cliProgress.SingleBar({ format: 'Components\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
 
-    count();
-}
+        let all_neighbors = get_all_neighbors(this.corridor_topology);
 
-function assign_areas(_areas_raw, _accuracy) {
-    let corridor = get_simpler_features(corridor_raw, _accuracy);
-    let areas = get_simpler_features(_areas_raw, _accuracy);
-    areas = filter_areas(get_bounding_box(corridor), areas);
-
-    const progress_bar = new cliProgress.SingleBar({ format: 'Assign Areas\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
-    progress_bar.start(num_nodes, 0);
-
-
-    for (let [node_id, patch] of Object.entries(corridor.features)) {
-
-        for (let area of areas.features) {
-            if (patch.geometry == null || area.geometry == null) {
-                continue;
+        loop:
+        for (let node_id = 0; node_id < this.num_nodes; node_id++) {
+            for (let component of this.components) {
+                if (component.contains(node_id)) {
+                    continue loop;
+                }
             }
 
+            let component_id = this.components.size;
+            let component = new Component(component_id, node_id, all_neighbors);
+            this.components.add(component);
+
+            progress_bar.increment(component.size);
+        }
+
+        progress_bar.stop();
+    }
+
+    filter_areas(_areas_topology, _accuracy) {
+        process.stdout.write("Simplifying corridor...");
+        let corridor_simplified = get_simpler_features(this.corridor_topology, _accuracy);
+        process.stdout.write("\r\x1b[K")
+
+        process.stdout.write("Simplifying areas...");
+        let areas_simplified = get_simpler_features(_areas_topology, _accuracy);
+        process.stdout.write("\r\x1b[K")
+
+        let bounding_box = get_bounding_box(corridor_simplified);
+        let valid_sites = new Set();
+
+        let progress_bar = new cliProgress.SingleBar({ format: 'Filter Areas\t{bar} {percentage}% | Time: {duration} s |  Area: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(areas_simplified.features.length, 0);
+
+        for (let feature of areas_simplified.features) {
             try {
-                if (turf.intersect(area, patch) != null) {
-                    for (let component of components) {
-                        if (component.contains(node_id)) {
-                            component.set_neighbor_area(node_id, area.properties.SITECODE);
-                            break;
-                        }
-                    }
+                if (feature.geometry == null) {
+                    continue;
+                }
+
+                if (intersect(feature, bounding_box) != null) {
+                    valid_sites.add(feature.properties.SITECODE);
                 }
             }
             catch (e) {
-                //console.error(e);
+                //console.log(e)
             }
-
+            progress_bar.increment();
         }
+        progress_bar.stop()
 
-        progress_bar.increment();
+        process.stdout.write("Getting areas features...");
+        let areas = get_features(_areas_topology);
+        process.stdout.write("\r\x1b[K")
+
+        process.stdout.write("Filtering...");
+        areas.features = areas.features.filter(feature => valid_sites.has(feature.properties.SITECODE));
+        process.stdout.write("\r\x1b[K")
+
+        process.stdout.write("Getting areas topology...");
+        let areas_topology = get_topology(areas);
+        process.stdout.write("\r\x1b[K")
+
+        return areas_topology;
     }
 
-    progress_bar.stop();
-}
+    assign_areas(_areas_topology, _accuracy) {
+        process.stdout.write("Simplifying corridor...");
+        let corridor_simplified = get_simpler_features(this.corridor_topology, _accuracy);
+        process.stdout.write("\r\x1b[K")
 
-//TODO: move to utils
-function get_simpler_features(_topology, _accuracy) {
-    let ps = topojson_simplify.presimplify(_topology);
-    let sp = topojson_simplify.simplify(ps, _accuracy);
-    return topojson_client.feature(sp, sp.objects[Object.keys(sp.objects)[0]]);
-}
+        process.stdout.write("Simplifying areas...");
+        let areas_simplified = get_simpler_features(_areas_topology, _accuracy);
+        process.stdout.write("\r\x1b[K")
 
-//TODO: move to utils
-function get_bounding_box(_layer) {
-    let min_x = 999;
-    let min_y = 999;
-    let max_x = -999;
-    let max_y = -999;
+        let progress_bar = new cliProgress.SingleBar(
+            { format: 'Assign Areas\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' },
+            cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
 
-    for (let patch of _layer.features) {
-        if (patch.geometry == null) {
-            continue;
-        }
 
-        for (let poligon of patch.geometry.coordinates) { // TODO: generalize
-            for (let point of poligon) {
-                let x = point[0];
-                let y = point[1];
-
-                if (x > max_x) {
-                    max_x = x;
+        for (let [node_id, patch] of Object.entries(corridor_simplified.features)) {
+            for (let area of areas_simplified.features) {
+                if (patch.geometry == null || area.geometry == null) {
+                    continue;
                 }
-                else if (x < min_x) {
-                    min_x = x;
+
+                try {
+                    if (intersect(area, patch) != null) {
+                        for (let component of this.components) {
+                            if (component.contains(node_id)) {
+                                component.set_neighbor_area(node_id, area.properties.SITECODE);
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch (e) {
+                    //console.error(e);
                 }
 
-                if (y > max_y) {
-                    max_y = y;
+            }
+
+            progress_bar.increment();
+        }
+
+        progress_bar.stop();
+    }
+
+    init_vcn_low_degree() {
+        let progress_bar = new cliProgress.SingleBar({ format: 'Isolated \t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree == null) {
+                    component.spot_alone(node.id);
                 }
-                else if (y < min_y) {
-                    min_y = y;
+                progress_bar.increment();
+            }
+        }
+        progress_bar.stop();
+
+
+        progress_bar = new cliProgress.SingleBar({ format: 'Appendices\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree == null) {
+                    component.spot_appendix(node.id);
+                }
+                progress_bar.increment();
+            }
+        }
+        progress_bar.stop();
+
+
+        progress_bar = new cliProgress.SingleBar({ format: 'Cut nodes\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree == null) {
+                    component.spot_cut_node(node.id);
+                }
+                progress_bar.increment();
+            }
+        }
+        progress_bar.stop();
+    }
+
+    init_vcn_high_degree(_max_degree, _max_distance) {
+        for (let degree = 2; degree <= _max_degree; degree++) {
+            let progress_bar = new cliProgress.SingleBar({ format: 'vcn degree ' + degree + '\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+            progress_bar.start(this.num_nodes, 0);
+
+            for (let component of this.components) {
+                for (let [id, node] of Object.entries(component.nodes)) {
+                    if (node.vcn_degree == null) {
+                        component.spot_vcn(node.id, degree, _max_distance);
+                    }
+                    progress_bar.increment();
                 }
             }
+            progress_bar.stop();
         }
     }
 
-    let bbox = [min_x, min_y, max_x, max_y];
-
-    return turf.bboxPolygon(bbox);
-}
-
-//TODO: move to utils
-function filter_areas(_bounding_box, _areas) {
-    let areas = {
-        type: 'FeatureCollection',
-        features: []
-    };
-
-    const progress_bar = new cliProgress.SingleBar({ format: 'Filter Areas\t{bar} {percentage}% | Time: {duration} s |  Area: {value}/{total}' }, cliProgress.Presets.shades_classic);
-    progress_bar.start(_areas.features.length, 0);
-
-    for (let area of _areas.features) {
-        try {
-            if (area.geometry == null) {
-                continue;
-            }
-
-            if (turf.intersect(area, _bounding_box) != null) {
-                areas.features.push(area);
-            }
-        }
-        catch (e) {
-            //console.log(e)
-        }
-        progress_bar.increment();
-    }
-    progress_bar.stop()
-
-    return areas;
-}
-
-function count() {
-
-    let still_null = 0
-    let neighbor_of_area = 0;
-    let appendix = 0;
-    let alone = 0;
-    let cutnode = 0;
-    let vcn_d2 = 0;
-    let vcn_d3 = 0;
-    let vcn_d4 = 0;
-
-    for (let component of components) {
-        for (let [id, node] of Object.entries(component.nodes)) {
-            if (node == undefined)
-                continue;
-
-            if (node.vcn_degree == 4)
-                vcn_d4++;
-
-            if (node.vcn_degree == 3)
-                vcn_d3++;
-
-            if (node.vcn_degree == 2)
-                vcn_d2++;
-
-            if (node.vcn_degree == 1)
-                cutnode++;
-
-            if (node.vcn_degree == 0)
-                neighbor_of_area++;
-
-            if (node.vcn_degree == -1)
-                appendix++;
-
-            if (node.vcn_degree == -2)
-                alone++;
-
-            if (node.vcn_degree == null)
-                still_null++;
 
 
-        }
-    }
 
-    console.log("vcn degree 4:    \t" + vcn_d4);
-    console.log("vcn degree 3:    \t" + vcn_d3);
-    console.log("vcn degree 2:    \t" + vcn_d2);
-    console.log("cutnode:         \t" + cutnode);
-    console.log("neighbor of area:\t" + neighbor_of_area);
-    console.log("appendix:        \t" + appendix);
-    console.log("alone:           \t" + alone);
-    console.log("null:            \t" + still_null);
-}
 
-function init_components() {
-    const progress_bar = new cliProgress.SingleBar({ format: 'Components\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
-    progress_bar.start(num_nodes, 0);
 
-    loop:
-    for (let node_id = 0; node_id < num_nodes; node_id++) {
-        for (let component of components) {
-            if (component.contains(node_id)) {
-                continue loop;
+
+    count() {
+
+        let still_null = 0
+        let neighbor_of_area = 0;
+        let appendix = 0;
+        let alone = 0;
+        let cutnode = 0;
+        let vcn_d2 = 0;
+        let vcn_d3 = 0;
+        let vcn_d4 = 0;
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node == undefined)
+                    continue;
+
+                if (node.vcn_degree == 4)
+                    vcn_d4++;
+
+                if (node.vcn_degree == 3)
+                    vcn_d3++;
+
+                if (node.vcn_degree == 2)
+                    vcn_d2++;
+
+                if (node.vcn_degree == 1)
+                    cutnode++;
+
+                if (node.vcn_degree == 0)
+                    neighbor_of_area++;
+
+                if (node.vcn_degree == -1)
+                    appendix++;
+
+                if (node.vcn_degree == -2)
+                    alone++;
+
+                if (node.vcn_degree == null)
+                    still_null++;
+
+
             }
         }
 
-        let component_id = components.size;
-        let component = new Component(component_id, node_id, all_neighbors);
-        components.add(component);
-
-        progress_bar.increment(component.size);
+        console.log("vcn degree 4:    \t" + vcn_d4);
+        console.log("vcn degree 3:    \t" + vcn_d3);
+        console.log("vcn degree 2:    \t" + vcn_d2);
+        console.log("cutnode:         \t" + cutnode);
+        console.log("neighbor of area:\t" + neighbor_of_area);
+        console.log("appendix:        \t" + appendix);
+        console.log("alone:           \t" + alone);
+        console.log("null:            \t" + still_null);
     }
-
-    progress_bar.stop();
-    num_components = components.size;
-}
-
-function init_vcn_low_degree() {
-    const progress_bar = new cliProgress.SingleBar({ format: 'Cut nodes\t{bar} {percentage}% | Time: {duration} s |  Component: {value}/{total}' }, cliProgress.Presets.shades_classic);
-    progress_bar.start(num_components, 0);
-
-    for (let component of components) {
-        progress_bar.increment();
-
-        component.set_vcn_low_degree();
-    }
-
-    progress_bar.stop();
-}
-
-function init_vcn_high_degree(_max_degree, _max_distance) {
-    const progress_bar = new cliProgress.SingleBar({ format: 'vcn\t\t{bar} {percentage}% | Time: {duration} s |  Component: {value}/{total}' }, cliProgress.Presets.shades_classic);
-    progress_bar.start(num_components, 0);
-
-    for (let component of components) {
-        progress_bar.increment();
-
-        component.set_vcn_high_degree(_max_degree, _max_distance);
-    }
-
-    progress_bar.stop();
-}
-
-//TODO: move to utils
-function get_all_neighbors() {
-    return topojson_client.neighbors(get_raw_nodes());
-}
-
-//TODO: move to utils
-function get_raw_nodes() {
-    return corridor_raw.objects[file_name].geometries;
-}
-
-function get_id(node) {
-    return corridor_raw.objects[file_name].geometries[node].properties[primary_key];
-}
-
-//TODO: move to utils
-function certify_key(primary_key) {
-    let keys = new Set();
-
-    for (let node of get_raw_nodes()) {
-        let key = node.properties[primary_key];
-
-        if (keys.has(key)) {
-            return null;
-        }
-
-        keys.add(key);
-    }
-
-    return primary_key;
-}
-
-//TODO: move to utils
-function get_file_name() {
-    return Object.keys(corridor_raw.objects)[0];
 }
