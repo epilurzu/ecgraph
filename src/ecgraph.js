@@ -14,27 +14,21 @@ export default class ECGraph {
         this.components = new Set();
         this.init_components();
 
+        this.areas_topology = this.filter_areas(_areas_topology, accuracy);
+        _areas_topology = null;
+        this.assign_areas(this.areas_topology, accuracy);
 
-        for (let component of this.components) {
-            if (component.id == 1) {
-                let i = component.shortest_path(6496, 6959);
+        this.init_vcn_low_degree(); // TODO: fix
 
-                for (let e of i.path) {
-                    console.log("or OBJECTID = " + get_id(e, this.primary_key, this.corridor_topology))
-                }
-            }
-        }
+        this.init_centroids();
+        this.shortest_path_score();
 
 
 
-        //this.areas_topology = this.filter_areas(_areas_topology, accuracy);
-        //_areas_topology = null;
-        //this.assign_areas(this.areas_topology, accuracy);
-        //
         //this.init_vcn_low_degree();
         //this.init_vcn_high_degree(max_degree, max_distance);
         //
-        //this.count();
+        this.count();
     }
 
     init_components() {
@@ -151,6 +145,48 @@ export default class ECGraph {
         progress_bar.stop();
     }
 
+    // TODO: init appendix and alone
+
+    init_centroids() {
+        process.stdout.write("Getting corridor features...");
+        let corridor = get_features(this.corridor_topology);
+        process.stdout.write("\r\x1b[K")
+
+        let progress_bar = new cliProgress.SingleBar({ format: 'Centroids\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree >= 0 || node.vcn_degree == null) {
+                    component.init_centroids(node.id, corridor);
+                }
+                progress_bar.increment();
+            }
+        }
+        progress_bar.stop();
+    }
+
+    shortest_path_score() {
+        let progress_bar = new cliProgress.SingleBar({ format: 'Shortest paths\t{bar} {percentage}% | Time: {duration} s |  Components: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.components.size, 0);
+
+        for (let component of this.components) {
+            let pairs = component.get_pairs_of_edge_nodes();
+            let n_shortest_path = pairs.size;
+
+            for (let pair of pairs) {
+                let start_node = pair[0];
+                let end_node = pair[1];
+
+                component.shortest_path(start_node, end_node);
+            }
+
+            component.normalize_sp_score(n_shortest_path);
+            progress_bar.increment();
+        }
+        progress_bar.stop();
+    }
+
     init_vcn_low_degree() {
         let progress_bar = new cliProgress.SingleBar({ format: 'Isolated \t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
         progress_bar.start(this.num_nodes, 0);
@@ -256,8 +292,6 @@ export default class ECGraph {
 
                 if (node.vcn_degree == null)
                     still_null++;
-
-
             }
         }
 

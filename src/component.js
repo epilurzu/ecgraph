@@ -1,4 +1,4 @@
-import { generate_combinations, get_shortest_distance_node } from "./utils";
+import { get_distance, get_shortest_distance_node, get_centroid, generate_combinations } from "./utils";
 
 import Node from "./node";
 
@@ -36,25 +36,83 @@ export default class Component {
     /*** end component initialization ***/
 
 
+    init_centroids(_node_id, _corridor) {
+        if (_corridor.features[_node_id].geometry != null) {
+            let coordinates = _corridor.features[_node_id].geometry.coordinates;
+            let centroid = get_centroid(coordinates).geometry.coordinates;
+            this.get_node(_node_id).centroid = centroid;
+        }
+    }
+
+    get_pairs_of_edge_nodes() {
+        let edge_nodes = this.get_edge_nodes();
+        let n_shortest_path = 0;
+        let pairs = new Set();
+
+        for (let [area_1, nodes] of Object.entries(edge_nodes)) {
+            let first_set = nodes;
+            delete edge_nodes[area_1];
+
+            for (let node_1 of first_set) {
+                for (let [area_2, second_set] of Object.entries(edge_nodes)) {
+                    n_shortest_path++;
+                    for (let node_2 of second_set) {
+                        pairs.add([node_1, node_2]);
+                    }
+                }
+            }
+        }
+        return pairs;
+    }
+
+    get_edge_nodes() {
+        let edge_nodes = {};
+
+        for (let [id, node] of Object.entries(this.nodes)) {
+            if (this.get_node(node.id).vcn_degree == NEIGHBOR_OF_AREA) {
+                for (let neighbor of this.get_node(node.id).neighbors) {
+                    if (this.get_node(neighbor).vcn_degree != NEIGHBOR_OF_AREA) {
+                        if (this.get_node(neighbor).vcn_degree != ALONE &&
+                            this.get_node(neighbor).vcn_degree != APPENDIX) {
+                            let areas = this.get_node(node.id).neighbors_areas;
+                            for (let area of areas) {
+                                if (edge_nodes[area] == undefined) {
+                                    edge_nodes[area] = new Set();
+                                }
+                                edge_nodes[area].add(node.id);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return edge_nodes;
+    }
+
     shortest_path(_start_node_id, _end_node_id) {
         let distances = {};
 
         distances[_end_node_id] = 9999999999;
         for (let neighbor of this.get_node(_start_node_id).neighbors) {
-            distances[neighbor] = this.get_node(neighbor).distance; // TODO: change to real distance
+            if (this.get_node(neighbor).vcn_degree >= NEIGHBOR_OF_AREA || this.get_node(neighbor).vcn_degree == null) {
+                distances[neighbor] = get_distance(this.get_node(_start_node_id).centroid, this.get_node(neighbor).centroid);
+            }
         }
 
-        let parents = { _end_node_id: null }; // TODO: ???
+        let parents = { _end_node_id: null };
         for (let neighbor of this.get_node(_start_node_id).neighbors) {
-            parents[neighbor] = _start_node_id;
+            if (this.get_node(neighbor).vcn_degree >= NEIGHBOR_OF_AREA || this.get_node(neighbor).vcn_degree == null) {
+                parents[neighbor] = _start_node_id;
+            }
         }
 
 
-        let visited = new Set();//[];
+        let visited = new Set();
 
         let node_id = get_shortest_distance_node(distances, visited);
-
-        while (node_id) { // TODO: ???
+        while (node_id) {
             let distance = distances[node_id];
             let children = this.get_node(node_id).neighbors;
 
@@ -62,8 +120,8 @@ export default class Component {
                 if (child == _start_node_id) {
                     continue;
                 }
-                else {
-                    let new_distance = distance + this.get_node(child).distance;
+                else if (this.get_node(child).vcn_degree >= NEIGHBOR_OF_AREA || this.get_node(child).vcn_degree == null) {
+                    let new_distance = distance + get_distance(this.get_node(node_id).centroid, this.get_node(child).centroid);
 
                     if (!distances[child] || distances[child] > new_distance) {
                         distances[child] = new_distance;
@@ -75,24 +133,29 @@ export default class Component {
             node_id = get_shortest_distance_node(distances, visited);
         }
 
-        let shortest_path = [_end_node_id];
+        let shortest_path = new Set([_end_node_id]);
         let parent = parents[_end_node_id];
 
         while (parent) {
-            shortest_path.push(parent);
+            shortest_path.add(parent);
             parent = parents[parent];
         }
 
-        shortest_path.reverse();
-
-        let results = {
-            distance: distances[_end_node_id],
-            path: shortest_path,
-        };
-
-        return results;
+        for (let node_of_path of shortest_path) {
+            if (this.get_node(node_of_path).sp_score == null) {
+                this.get_node(node_of_path).sp_score = 0;
+            }
+            this.get_node(node_of_path).sp_score++;
+        }
     }
 
+    normalize_sp_score(_n_shortest_path) {
+        for (let [id, node] of Object.entries(this.nodes)) {
+            if (node.sp_score != null) {
+                node.sp_score = node.sp_score / _n_shortest_path;
+            }
+        }
+    }
 
     /*** spot and set nodes that are alone, appendix or cutnodes ***/
     spot_alone(_node_id) {

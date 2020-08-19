@@ -1,7 +1,7 @@
 import * as topojson_server from "topojson-server";
 import * as topojson_client from "topojson-client";
 import * as topojson_simplify from "topojson-simplify";
-import { bboxPolygon } from "turf";
+import { point, distance, centroid, polygon, bboxPolygon } from "turf";
 
 export function get_id(_node_id, _primary_key, _corridor_raw) {
   return _corridor_raw.objects[get_file_name(_corridor_raw)].geometries[_node_id].properties[_primary_key];
@@ -85,6 +85,18 @@ export function get_features(_topology) {
 
 export function get_topology(_features) {
   return topojson_server.topology({ foo: _features });
+}
+
+export function get_centroid(_coordinates) {
+  let p = polygon(_coordinates);
+  return centroid(p);
+}
+
+export function get_distance(centroid_1, centroid_2) {
+  let p_1 = point(centroid_1);
+  let p_2 = point(centroid_2);
+  return distance(p_1, p_2);
+
 }
 
 export function get_shortest_distance_node(distances, visited) {
