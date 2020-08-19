@@ -14,14 +14,27 @@ export default class ECGraph {
         this.components = new Set();
         this.init_components();
 
-        this.areas_topology = this.filter_areas(_areas_topology, accuracy);
-        _areas_topology = null;
-        this.assign_areas(this.areas_topology, accuracy);
 
-        this.init_vcn_low_degree();
-        this.init_vcn_high_degree(max_degree, max_distance);
+        for (let component of this.components) {
+            if (component.id == 1) {
+                let i = component.shortest_path(6496, 6959);
 
-        this.count();
+                for (let e of i.path) {
+                    console.log("or OBJECTID = " + get_id(e, this.primary_key, this.corridor_topology))
+                }
+            }
+        }
+
+
+
+        //this.areas_topology = this.filter_areas(_areas_topology, accuracy);
+        //_areas_topology = null;
+        //this.assign_areas(this.areas_topology, accuracy);
+        //
+        //this.init_vcn_low_degree();
+        //this.init_vcn_high_degree(max_degree, max_distance);
+        //
+        //this.count();
     }
 
     init_components() {

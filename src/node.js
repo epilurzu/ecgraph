@@ -5,5 +5,7 @@ export default class Node {
         this.neighbors = new Set(_neighbors);
         this.neighbors_areas = new Set();
         this.vcn_degree = null;
+
+        this.distance = 1;
     }
 }

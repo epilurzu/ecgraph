@@ -87,6 +87,19 @@ export function get_topology(_features) {
   return topojson_server.topology({ foo: _features });
 }
 
+export function get_shortest_distance_node(distances, visited) {
+  let shortest = null;
+
+  for (let [node_id, distance] of Object.entries(distances)) {
+    let current_is_shortest = shortest === null || distance < distances[shortest];
+
+    if (current_is_shortest && !visited.has(node_id)) {
+      shortest = node_id;
+    }
+  }
+  return shortest;
+}
+
 // return every combination of elements in source_array in arrays of length combo_length 
 export function generate_combinations(source_array, combo_length) {
   const source_length = source_array.length;

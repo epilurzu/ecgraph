@@ -1,4 +1,4 @@
-import { generate_combinations } from "./utils";
+import { generate_combinations, get_shortest_distance_node } from "./utils";
 
 import Node from "./node";
 
@@ -34,6 +34,65 @@ export default class Component {
         return _all_neighbors[_node_id];
     }
     /*** end component initialization ***/
+
+
+    shortest_path(_start_node_id, _end_node_id) {
+        let distances = {};
+
+        distances[_end_node_id] = 9999999999;
+        for (let neighbor of this.get_node(_start_node_id).neighbors) {
+            distances[neighbor] = this.get_node(neighbor).distance; // TODO: change to real distance
+        }
+
+        let parents = { _end_node_id: null }; // TODO: ???
+        for (let neighbor of this.get_node(_start_node_id).neighbors) {
+            parents[neighbor] = _start_node_id;
+        }
+
+
+        let visited = new Set();//[];
+
+        let node_id = get_shortest_distance_node(distances, visited);
+
+        while (node_id) { // TODO: ???
+            let distance = distances[node_id];
+            let children = this.get_node(node_id).neighbors;
+
+            for (let child of children) {
+                if (child == _start_node_id) {
+                    continue;
+                }
+                else {
+                    let new_distance = distance + this.get_node(child).distance;
+
+                    if (!distances[child] || distances[child] > new_distance) {
+                        distances[child] = new_distance;
+                        parents[child] = node_id;
+                    }
+                }
+            }
+            visited.add(node_id);
+            node_id = get_shortest_distance_node(distances, visited);
+        }
+
+        let shortest_path = [_end_node_id];
+        let parent = parents[_end_node_id];
+
+        while (parent) {
+            shortest_path.push(parent);
+            parent = parents[parent];
+        }
+
+        shortest_path.reverse();
+
+        let results = {
+            distance: distances[_end_node_id],
+            path: shortest_path,
+        };
+
+        return results;
+    }
+
 
     /*** spot and set nodes that are alone, appendix or cutnodes ***/
     spot_alone(_node_id) {
