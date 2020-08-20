@@ -1,7 +1,7 @@
 import { intersect } from "turf";
 import * as cliProgress from "cli-progress";
 
-import { get_id, certify_key, get_raw_nodes, get_all_neighbors, get_features, get_simpler_features, get_topology, get_bounding_box } from "./utils";
+import { get_id, get_file_name, certify_key, get_raw_nodes, get_all_neighbors, get_features, get_simpler_features, get_topology, get_bounding_box, neighbours_to_string } from "./utils";
 import Component from "./component";
 
 export default class ECGraph {
@@ -23,8 +23,6 @@ export default class ECGraph {
 
         this.set_distances();
         this.shortest_path_scores();
-
-
 
         this.cut_nodes();
         this.virtual_cut_nodes(max_degree, max_distance);
@@ -272,6 +270,32 @@ export default class ECGraph {
         }
     }
 
+    get_updated_corridor() {
+        let corridor = this.corridor_topology;
+
+        for (let [id, node] of Object.entries(corridor.objects[get_file_name(corridor)].geometries)) {
+            for (let component of this.components) {
+                if (component.contains(id)) {
+                    let component_id = component.get_node(id).component_id;
+                    //let neighbors = [...component.get_node(id).neighbors].map(node => get_id(node, this.primary_key, this.corridor_topology));
+                    //neighbors = neighbours_to_string(neighbors);
+                    let neighbors_area = neighbours_to_string(component.get_node(id).neighbors_areas);
+                    let sp_score = component.get_node(id).sp_score;
+                    let vcn_degree = component.get_node(id).vcn_degree;
+                    let score = component.get_node(id).score;
+
+                    node.properties["component"] = component_id;
+                    //node.properties["neighborsN"] = neighbors; // Too big, exceeds 254-byte limit for strings in shp files
+                    node.properties["neighbor_A"] = neighbors_area;
+                    node.properties["sp_score"] = sp_score;
+                    node.properties["vcn_degree"] = vcn_degree;
+                    node.properties["score"] = score;
+                }
+            }
+        }
+        return corridor;
+    }
+
     count() {
 
         let still_null = 0
@@ -314,13 +338,13 @@ export default class ECGraph {
             }
         }
 
-        console.log("vcn degree 4:    \t" + vcn_d4);
-        console.log("vcn degree 3:    \t" + vcn_d3);
-        console.log("vcn degree 2:    \t" + vcn_d2);
-        console.log("cutnode:         \t" + cutnode);
-        console.log("neighbor of area:\t" + neighbor_of_area);
-        console.log("appendix:        \t" + appendix);
-        console.log("alone:           \t" + alone);
         console.log("null:            \t" + still_null);
+        console.log("alone:           \t" + alone);
+        console.log("appendix:        \t" + appendix);
+        console.log("neighbor of area:\t" + neighbor_of_area);
+        console.log("cutnode:         \t" + cutnode);
+        console.log("vcn degree 2:    \t" + vcn_d2);
+        console.log("vcn degree 3:    \t" + vcn_d3);
+        console.log("vcn degree 4:    \t" + vcn_d4);
     }
 }

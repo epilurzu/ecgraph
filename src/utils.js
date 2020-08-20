@@ -112,6 +112,19 @@ export function get_shortest_distance_node(distances, visited) {
   return shortest;
 }
 
+export function neighbours_to_string(_neighbors) {
+  let str = "";
+  for (let neighbor of _neighbors) {
+    if (str == "") {
+      str = String(neighbor);
+    }
+    else {
+      str = str + ", " + String(neighbor);
+    }
+  }
+  return str;
+}
+
 // return every combination of elements in source_array in arrays of length combo_length 
 export function generate_combinations(source_array, combo_length) {
   const source_length = source_array.length;
