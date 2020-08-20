@@ -6,7 +6,7 @@ export default class Node {
         this.neighbors = new Set(_neighbors);
 
         this.centroid = null;
-        //this.distances = {} // TODO
+        this.distances = {};
         this.sp_score = null;
 
         this.neighbors_areas = new Set();

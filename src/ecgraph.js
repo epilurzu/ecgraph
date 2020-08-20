@@ -21,7 +21,7 @@ export default class ECGraph {
         this.isolated();
         this.appendices();
 
-        this.init_centroids();
+        this.set_distances();
         this.shortest_path_scores();
 
 
@@ -35,9 +35,7 @@ export default class ECGraph {
     }
 
     init_components() {
-        let progress_bar = new cliProgress.SingleBar({ format: 'Components\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
-        progress_bar.start(this.num_nodes, 0);
-
+        process.stdout.write("Initializing components...");
         let all_neighbors = get_all_neighbors(this.corridor_topology);
 
         loop:
@@ -51,11 +49,8 @@ export default class ECGraph {
             let component_id = this.components.size;
             let component = new Component(component_id, node_id, all_neighbors);
             this.components.add(component);
-
-            progress_bar.increment(component.size);
         }
-
-        progress_bar.stop();
+        process.stdout.write("\r\x1b[K");
     }
 
     filter_areas(_areas_topology, _accuracy) {
@@ -70,9 +65,8 @@ export default class ECGraph {
         let bounding_box = get_bounding_box(corridor_simplified);
         let valid_sites = new Set();
 
-        let progress_bar = new cliProgress.SingleBar({ format: 'Filter Areas\t{bar} {percentage}% | Time: {duration} s |  Area: {value}/{total}' }, cliProgress.Presets.shades_classic);
-        progress_bar.start(areas_simplified.features.length, 0);
 
+        process.stdout.write("Filtering areas...");
         for (let feature of areas_simplified.features) {
             try {
                 if (feature.geometry == null) {
@@ -86,9 +80,8 @@ export default class ECGraph {
             catch (e) {
                 //console.log(e)
             }
-            progress_bar.increment();
         }
-        progress_bar.stop()
+        process.stdout.write("\r\x1b[K")
 
         process.stdout.write("Getting areas features...");
         let areas = get_features(_areas_topology);
@@ -178,23 +171,30 @@ export default class ECGraph {
         progress_bar.stop();
     }
 
-    init_centroids() {
+    set_distances() {
         process.stdout.write("Getting corridor features...");
         let corridor = get_features(this.corridor_topology);
         process.stdout.write("\r\x1b[K")
 
-        let progress_bar = new cliProgress.SingleBar({ format: 'Centroids\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
-        progress_bar.start(this.num_nodes, 0);
-
+        process.stdout.write("Assigning centroids...");
         for (let component of this.components) {
             for (let [id, node] of Object.entries(component.nodes)) {
                 if (node.vcn_degree >= 0 || node.vcn_degree == null) {
                     component.init_centroids(node.id, corridor);
                 }
-                progress_bar.increment();
             }
         }
-        progress_bar.stop();
+        process.stdout.write("\r\x1b[K")
+
+        process.stdout.write("Setting distances...");
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree >= 0 || node.vcn_degree == null) {
+                    component.set_distances(node.id);
+                }
+            }
+        }
+        process.stdout.write("\r\x1b[K")
     }
 
     shortest_path_scores() {

@@ -1,6 +1,7 @@
 import { get_distance, get_shortest_distance_node, get_centroid, generate_combinations } from "./utils";
 
 import Node from "./node";
+import { neighbors } from "topojson-client";
 
 var NEIGHBOR_OF_AREA = 0;
 var APPENDIX = -1;
@@ -41,6 +42,30 @@ export default class Component {
             let coordinates = _corridor.features[_node_id].geometry.coordinates;
             let centroid = get_centroid(coordinates).geometry.coordinates;
             this.get_node(_node_id).centroid = centroid;
+        }
+    }
+
+    set_distances(_node_id) {
+        for (let neighbor of this.get_node(_node_id).neighbors) {
+            if (this.get_node(neighbor).vcn_degree >= 0 ||
+                this.get_node(neighbor).vcn_degree == null) {
+                let distance = null;
+
+                if (this.get_node(_node_id).distances[neighbor] != undefined) {
+                    distance = this.get_node(_node_id).distances[neighbor];
+                }
+                else if (this.get_node(neighbor).distances[_node_id] != undefined) {
+                    distance = this.get_node(neighbor).distances[_node_id];
+                }
+                else {
+                    let c_1 = this.get_node(_node_id).centroid;
+                    let c_2 = this.get_node(neighbor).centroid;
+                    distance = get_distance(c_1, c_2);
+                }
+
+                this.get_node(_node_id).distances[neighbor] = distance;
+                this.get_node(neighbor).distances[_node_id] = distance;
+            }
         }
     }
 
@@ -97,7 +122,7 @@ export default class Component {
         distances[_end_node_id] = 9999999999;
         for (let neighbor of this.get_node(_start_node_id).neighbors) {
             if (this.get_node(neighbor).vcn_degree >= NEIGHBOR_OF_AREA || this.get_node(neighbor).vcn_degree == null) {
-                distances[neighbor] = get_distance(this.get_node(_start_node_id).centroid, this.get_node(neighbor).centroid);
+                distances[neighbor] = this.get_node(_start_node_id).distances[neighbor];
             }
         }
 
@@ -121,7 +146,7 @@ export default class Component {
                     continue;
                 }
                 else if (this.get_node(child).vcn_degree >= NEIGHBOR_OF_AREA || this.get_node(child).vcn_degree == null) {
-                    let new_distance = distance + get_distance(this.get_node(node_id).centroid, this.get_node(child).centroid);
+                    let new_distance = distance + this.get_node(node_id).distances[child];
 
                     if (!distances[child] || distances[child] > new_distance) {
                         distances[child] = new_distance;
