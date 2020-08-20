@@ -35,7 +35,7 @@ export default class Component {
     }
     /*** end component initialization ***/
 
-
+    /*** shortest path score ***/
     init_centroids(_node_id, _corridor) {
         if (_corridor.features[_node_id].geometry != null) {
             let coordinates = _corridor.features[_node_id].geometry.coordinates;
@@ -156,6 +156,7 @@ export default class Component {
             }
         }
     }
+    /*** end shortest path score ***/
 
     /*** spot and set nodes that are alone, appendix or cutnodes ***/
     spot_alone(_node_id) {

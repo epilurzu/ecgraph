@@ -8,7 +8,7 @@ export default class ECGraph {
     constructor(_corridor_topology, _areas_topology, _primary_key = null, accuracy = 0.00001, max_degree = 2, max_distance = 3) {
         this.corridor_topology = _corridor_topology;
         _corridor_topology = null;
-        this.primary_key = certify_key(this.corridor_topology, _primary_key);  // TOOD: if null, use index
+        this.primary_key = certify_key(this.corridor_topology, _primary_key);  // TODO: if null, use index
         this.num_nodes = get_raw_nodes(this.corridor_topology).length;
 
         this.components = new Set();
@@ -18,16 +18,17 @@ export default class ECGraph {
         _areas_topology = null;
         this.assign_areas(this.areas_topology, accuracy);
 
-        this.init_vcn_low_degree(); // TODO: fix
+        this.isolated();
+        this.appendices();
 
         this.init_centroids();
-        this.shortest_path_score();
+        this.shortest_path_scores();
 
 
 
-        //this.init_vcn_low_degree();
-        //this.init_vcn_high_degree(max_degree, max_distance);
-        //
+        this.cut_nodes();
+        this.virtual_cut_nodes(max_degree, max_distance);
+
         this.count();
     }
 
@@ -145,7 +146,35 @@ export default class ECGraph {
         progress_bar.stop();
     }
 
-    // TODO: init appendix and alone
+    isolated() {
+        let progress_bar = new cliProgress.SingleBar({ format: 'Isolated \t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree == null) {
+                    component.spot_alone(node.id);
+                }
+                progress_bar.increment();
+            }
+        }
+        progress_bar.stop();
+    }
+
+    appendices() {
+        let progress_bar = new cliProgress.SingleBar({ format: 'Appendices\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(this.num_nodes, 0);
+
+        for (let component of this.components) {
+            for (let [id, node] of Object.entries(component.nodes)) {
+                if (node.vcn_degree == null) {
+                    component.spot_appendix(node.id);
+                }
+                progress_bar.increment();
+            }
+        }
+        progress_bar.stop();
+    }
 
     init_centroids() {
         process.stdout.write("Getting corridor features...");
@@ -166,57 +195,45 @@ export default class ECGraph {
         progress_bar.stop();
     }
 
-    shortest_path_score() {
-        let progress_bar = new cliProgress.SingleBar({ format: 'Shortest paths\t{bar} {percentage}% | Time: {duration} s |  Components: {value}/{total}' }, cliProgress.Presets.shades_classic);
-        progress_bar.start(this.components.size, 0);
+    shortest_path_scores() {
+        let tot_shortest_paths = 0;
+        let sp_info = {};
 
+        process.stdout.write("Identifying start and end nodes...");
         for (let component of this.components) {
             let pairs = component.get_pairs_of_edge_nodes();
-            let n_shortest_path = pairs.size;
-
-            for (let pair of pairs) {
-                let start_node = pair[0];
-                let end_node = pair[1];
-
-                component.shortest_path(start_node, end_node);
+            if (pairs.size > 0) {
+                tot_shortest_paths = tot_shortest_paths + pairs.size;
+                sp_info[component.id] = pairs;
             }
+        }
+        process.stdout.write("\r\x1b[K")
 
-            component.normalize_sp_score(n_shortest_path);
-            progress_bar.increment();
+        let progress_bar = new cliProgress.SingleBar({ format: 'Shortest paths\t{bar} {percentage}% | Time: {duration} s |  Shortest Path: {value}/{total}' }, cliProgress.Presets.shades_classic);
+        progress_bar.start(tot_shortest_paths, 0);
+
+        for (let [component_id, pairs] of Object.entries(sp_info)) {
+            for (let component of this.components) {
+                if (component_id == component.id) {
+
+                    let n_shortest_path = pairs.size;
+
+                    for (let pair of pairs) {
+                        let start_node = pair[0];
+                        let end_node = pair[1];
+                        component.shortest_path(start_node, end_node);
+                        progress_bar.increment();
+                    }
+
+                    component.normalize_sp_score(n_shortest_path);
+                }
+            }
         }
         progress_bar.stop();
     }
 
-    init_vcn_low_degree() {
-        let progress_bar = new cliProgress.SingleBar({ format: 'Isolated \t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
-        progress_bar.start(this.num_nodes, 0);
-
-        for (let component of this.components) {
-            for (let [id, node] of Object.entries(component.nodes)) {
-                if (node.vcn_degree == null) {
-                    component.spot_alone(node.id);
-                }
-                progress_bar.increment();
-            }
-        }
-        progress_bar.stop();
-
-
-        progress_bar = new cliProgress.SingleBar({ format: 'Appendices\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
-        progress_bar.start(this.num_nodes, 0);
-
-        for (let component of this.components) {
-            for (let [id, node] of Object.entries(component.nodes)) {
-                if (node.vcn_degree == null) {
-                    component.spot_appendix(node.id);
-                }
-                progress_bar.increment();
-            }
-        }
-        progress_bar.stop();
-
-
-        progress_bar = new cliProgress.SingleBar({ format: 'Cut nodes\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
+    cut_nodes() {
+        let progress_bar = new cliProgress.SingleBar({ format: 'Cut nodes\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
         progress_bar.start(this.num_nodes, 0);
 
         for (let component of this.components) {
@@ -230,7 +247,7 @@ export default class ECGraph {
         progress_bar.stop();
     }
 
-    init_vcn_high_degree(_max_degree, _max_distance) {
+    virtual_cut_nodes(_max_degree, _max_distance) {
         for (let degree = 2; degree <= _max_degree; degree++) {
             let progress_bar = new cliProgress.SingleBar({ format: 'vcn degree ' + degree + '\t{bar} {percentage}% | Time: {duration} s |  Node: {value}/{total}' }, cliProgress.Presets.shades_classic);
             progress_bar.start(this.num_nodes, 0);
