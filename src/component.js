@@ -287,6 +287,29 @@ export default class Component {
     }
     /*** end spot and set nodes that have degree 2 or more ***/
 
+    set_scores() {
+        for (let [id, node] of Object.entries(this.nodes)) {
+            let vcn_score = null;
+            let sp_score = null;
+
+            if (node.vcn_degree <= 0 || node.vcn_degree == null) {
+                vcn_score = 0;
+            }
+            else {
+                vcn_score = 1 / node.vcn_degree
+            }
+
+            if (node.sp_score == null) {
+                sp_score = 0;
+            }
+            else {
+                sp_score = node.sp_score
+            }
+
+            node.score = vcn_score * sp_score;
+        }
+    }
+
     get_node(_node_id) {
         return this.nodes[_node_id];
     }

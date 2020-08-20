@@ -29,6 +29,8 @@ export default class ECGraph {
         this.cut_nodes();
         this.virtual_cut_nodes(max_degree, max_distance);
 
+        this.set_score();
+
         this.count();
     }
 
@@ -264,11 +266,11 @@ export default class ECGraph {
         }
     }
 
-
-
-
-
-
+    set_score() {
+        for (let component of this.components) {
+            component.set_scores()
+        }
+    }
 
     count() {
 
