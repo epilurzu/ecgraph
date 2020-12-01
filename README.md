@@ -26,10 +26,18 @@ npm link
 
 ## :video_game: Usage
 
-More instruction will come.
+The software uses maps of [protected areas](https://www.eea.europa.eu/data-and-maps/data/natura-11) defined by the European [Natura 2000 project](https://ec.europa.eu/environment/nature/natura2000/) to spot patches of the ecological corridor that intersect them.
+
+To easily manage, read and compute areas and corridors maps for the software, it is necessary to input files in [TopoJSON](https://github.com/topojson/topojson-specification/blob/master/README.md) format. So much thanks to [mapshaper](https://github.com/mbloch/mapshaper) of [mbloch](https://github.com/mbloch), it was very useful to convert big geodata files!
+
+TopoJSON files of Natura 2000 protected areas split by states can be downloaded from [here](https://mega.nz/file/NANynRSC#aTELyREopayF35OK1rZv5sklPPypubycqYCkzu_oTRU).
+
+TopoJSON file of ecological corridor for now has to be provided by the user. Sorry :disappointed:
+
+* Command example:  
 
 ```bash
-ecgraph path/to/topojson/ecological_corridor.json "PRIMARY_KEY_NAME"
+ecgraph -c path/to/corridor.json -a path/to/area/.json --key id --accuracy 0.00001 --max_degree 4 --max_distance 10 -o path to output
 ```
 
 ## :chart_with_upwards_trend: Development
